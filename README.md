@@ -151,7 +151,7 @@ We provide a few notebooks in colab to help you get a grasp on DETR:
 * [Panoptic Colab Notebook](https://colab.research.google.com/github/facebookresearch/detr/blob/colab/notebooks/DETR_panoptic.ipynb): Demonstrates how to use DETR for panoptic segmentation and plot the predictions.
 
 
-# Usage - Object detection
+# Usage - Object detection & Intrusion detection
 There are no extra compiled components in DETR and package dependencies are minimal,
 so the code is very simple to use. We provide instructions how to install dependencies via conda.
 First, clone the repository locally:
@@ -175,7 +175,7 @@ pip install git+https://github.com/cocodataset/panopticapi.git
 ```
 
 ## Data preparation
-
+### For COCO dataset
 Download and extract COCO 2017 train and val images with annotations from
 [http://cocodataset.org](http://cocodataset.org/#download).
 We expect the directory structure to be the following:
@@ -185,6 +185,77 @@ path/to/coco/
   train2017/    # train images
   val2017/      # val images
 ```
+
+### For cityintrusion dataset
+We establish the cityintrusion dataset for pedestrian intrusion detection, and modify the datatset in COCO style. 
+The validation set is in '\cityintrusion\images\val' and the annotations of validation set is in '\cityintrusion\annotations\instances_val.json'.
+The structure of annotation file is following:
+```
+{
+    "info": info,
+    "images": [image],
+    "annotations": [annotation],
+    "categories": [category]
+}
+
+# example of image
+"images": [
+    {
+        "id": 0,
+        "width": 2048,
+        "height": 1024,
+        "file_name": "munster_000056_000019_leftImg8bit.png",
+        "city": "munster"
+    }
+]
+
+# example of annotation
+"annotations": [
+    {
+        "id": 0,
+        "image_id": 0,
+        "category_id": 1,
+        "segmentation":[[]],
+        "area": 1265.0,
+        "bbox": [1170, 432, 23, 55],
+        "iscrowd": 0,
+        "state": -1
+    }
+]
+
+# the categories
+"categories": [
+    {
+        "supercategory": "person",
+        "id": 1,
+        "name": "pedestrian"
+    },
+    {
+        "supercategory": "person",
+        "id": 2,
+        "name": "rider"
+    },
+    {
+        "supercategory": "intrusion label",
+        "id": 3,
+        "name": "None"
+    },
+    {
+        "supercategory": "intrusion label",
+        "id": 4,
+        "name": "Non Intrusion"
+    },
+    {
+        "supercategory": "intrusion label",
+        "id": 5,
+        "name": "Intrusion"
+     }
+]
+```
+The differences between COCO dataset and cityintrusion dataset are that 
+we have 'city' message in image description and 'state' message in annotation description.
+The 'state' message represents the intrusion state of object. When state = -1, it is None.
+When state = 0, it is non-intrusion. When state = 1, it is intrusion.
 
 ## Training
 To train baseline DETR on a single node with 8 gpus for 300 epochs run:
@@ -207,6 +278,7 @@ The transformer is trained with dropout of 0.1, and the whole model is trained w
 To evaluate DETR R50 on COCO val5k with a single GPU run:
 ```
 python main.py --batch_size 2 --no_aux_loss --eval --resume /home/szy/detr/checkpoints/detr-r50-e632da11.pth --coco_path /home/szy/data/coco
+python main.py --batch_size 2 --no_aux_loss --eval --resume /home/szy/detr/checkpoints/detr-r50-e632da11.pth --dataset_file cityintrusion --coco_path /home/szy/data/cityintrusion 
 ```
 We provide results for all DETR detection models in this
 [gist](https://gist.github.com/szagoruyko/9c9ebb8455610958f7deaa27845d7918).
