@@ -186,9 +186,11 @@ path/to/coco/
   val2017/      # val images
 ```
 
-### For cityintrusion dataset
-We establish the cityintrusion dataset for pedestrian intrusion detection, and modify the datatset in COCO style. 
-The validation set is in '\cityintrusion\images\val' and the annotations of validation set is in '\cityintrusion\annotations\instances_val.json'.
+### For intruscapes dataset
+We establish the intruscapes dataset for pedestrian intrusion detection, and modify the datatset in COCO style. 
+The validation set is in '\intruscapes\images\val' and the annotations of validation set is in '\intruscapes\annotations\instances_val.json'.
+The training set is in '\intruscapes\images\train' and the annotations of training set is in 'intruscapes\annotations\instances_train.json'.
+Now, we only have 1,000 instances in training set.
 The structure of annotation file is following:
 ```
 {
@@ -258,10 +260,16 @@ The 'state' message represents the intrusion state of object. When state = -1, i
 When state = 0, it is non-intrusion. When state = 1, it is intrusion.
 
 ## Training
-To train baseline DETR on a single node with 8 gpus for 300 epochs run:
+To train baseline DETR on a single node with 8 gpus for 300 epochs on COCO val5k run:
 ```
 python -m torch.distributed.launch --nproc_per_node=8 --use_env main.py --coco_path /path/to/coco 
 ```
+To train baseline DETR on a single node with one gpu for 300 epochs on intruscapes run:
+```
+python -m torch.distributed.launch --nproc_per_node=1 --use_env main.py --dataset_file intruscapes --coco_path /home/szy/data/intruscapes 
+python main.py --dataset_file intruscapes --coco_path /home/szy/data/intruscapes
+```
+
 A single epoch takes 28 minutes, so 300 epoch training
 takes around 6 days on a single machine with 8 V100 cards.
 To ease reproduction of our results we provide
@@ -278,8 +286,12 @@ The transformer is trained with dropout of 0.1, and the whole model is trained w
 To evaluate DETR R50 on COCO val5k with a single GPU run:
 ```
 python main.py --batch_size 2 --no_aux_loss --eval --resume /home/szy/detr/checkpoints/detr-r50-e632da11.pth --coco_path /home/szy/data/coco
-python main.py --batch_size 2 --no_aux_loss --eval --resume /home/szy/detr/checkpoints/detr-r50-e632da11.pth --dataset_file cityintrusion --coco_path /home/szy/data/cityintrusion 
 ```
+To evaluate DETR R50 on intruscapes with a single GPU run:
+```
+python main.py --batch_size 2 --no_aux_loss --eval --resume /home/szy/detr/checkpoints/detr-r50-e632da11.pth --dataset_file intruscapes --coco_path /home/szy/data/intruscapes 
+```
+
 We provide results for all DETR detection models in this
 [gist](https://gist.github.com/szagoruyko/9c9ebb8455610958f7deaa27845d7918).
 Note that numbers vary depending on batch size (number of images) per GPU.

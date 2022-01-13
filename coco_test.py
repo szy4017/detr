@@ -3,9 +3,7 @@ from matplotlib import pyplot as plt
 import cv2 as cv
 import numpy as np
 from pycocotools.coco import COCO
-from pycocotools.cocoeval import COCOeval
-import numpy as np
-import pylab,json
+import json
 
 def bgr2rgb(img):
     # 用cv自带的分割和合并函数
@@ -171,19 +169,68 @@ def main_cityintrusion():
 
     plt.show()
 
-def eval():
-    gt_path = "./Mycoco.json"  # 存放真实标签的路径
-    dt_path = "./Myresult.json"  # 存放检测结果的路径
-    cocoGt = COCO(gt_path)
-    cocoDt = cocoGt.loadRes(dt_path)
-    cocoEval = COCOeval(cocoGt, cocoDt, "bbox")  #
-    cocoEval.evaluate()
-    cocoEval.accumulate()
-    cocoEval.summarize()
+def getFileList_train():
+    file_path = '/home/szy/data/cityscape/gtIntrusionCityPersons/train'
+    file_list = list()
+    for i, j, k in os.walk(file_path):
+        file_list = file_list + k
+    print(file_list)
+    print(len(file_list))
+    return file_list
 
+
+def main_cityintrusion_train():
+    # 构建验证集
+    root_path = '/home/szy/data/cityscape/leftImg8bit/train'
+    file_list = getFileList_train()
+    train_set = list()
+    for file_name in file_list:
+        city_name = file_name.split('_')[0]
+        file_path = os.path.join(root_path, city_name)
+        file_path = os.path.join(file_path, file_name)
+        train_set.append(file_path)
+    print(train_set)
+    print(len(train_set))
+
+    # 获取标注信息
+    annFile_path = './Mycoco_train.json'
+    coco = COCO(annFile_path)
+    print(coco)
+
+    # 获取类别标签信息
+    print(coco.getCatIds())
+    categories = coco.loadCats(coco.getCatIds())
+    print(categories)
+    names = [cat['name'] for cat in categories]
+    print(names)
+    catIds = coco.getCatIds(catNms='pedestrian')
+    print(catIds)
+    imgIds = coco.getImgIds(catIds=catIds)
+    print(imgIds)
+    img_info = coco.loadImgs(imgIds[np.random.randint(0, len(imgIds))])
+    img_info = img_info[0]
+    print(img_info)
+
+    root_path = '/home/szy/data/cityscape/leftImg8bit/train'
+    file_name = img_info['file_name']
+    city_name = file_name.split('_')[0]
+    imgPath = os.path.join(root_path, city_name)
+    imgPath = os.path.join(imgPath, file_name)
+    print(imgPath)
+    img = cv.imread(imgPath)
+    plt.imshow(bgr2rgb(img))
+    annIds = coco.getAnnIds(imgIds=img_info['id'])
+    print(annIds)
+    anns = coco.loadAnns(annIds)
+    print(anns)
+    print(anns[0]['bbox'])
+    coco.showBBox(anns)
+    #coco.showIntrusion(anns)
+
+    plt.show()
 
 if __name__ == '__main__':
     #test_Mycoco()
     #main()
     #main_cityintrusion()
-    eval()
+    main_cityintrusion_train()

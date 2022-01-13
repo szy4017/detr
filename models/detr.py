@@ -310,7 +310,7 @@ def build(args):
     # you should pass `num_classes` to be 2 (max_obj_id + 1).
     # For more details on this, check the following discussion
     # https://github.com/facebookresearch/detr/issues/108#issuecomment-650269223
-    if args.dataset_file == 'coco' or args.dataset_file == 'cityintrusion':
+    if args.dataset_file == 'coco' or args.dataset_file == 'intruscapes':
         num_classes = 91
     else:
         num_classes = 20
