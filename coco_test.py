@@ -3,6 +3,7 @@ from matplotlib import pyplot as plt
 import cv2 as cv
 import numpy as np
 from pycocotools.coco import COCO
+from pycocotools.cocoeval import COCOeval
 import json
 
 def bgr2rgb(img):
@@ -119,7 +120,6 @@ def test_Mycoco():
     anns = coco.loadAnns(annIds)
     print(anns)
 
-
 def main_cityintrusion():
     # 构建验证集
     root_path = '/home/szy/data/cityscape/leftImg8bit/val'
@@ -178,7 +178,6 @@ def getFileList_train():
     print(len(file_list))
     return file_list
 
-
 def main_cityintrusion_train():
     # 构建验证集
     root_path = '/home/szy/data/cityscape/leftImg8bit/train'
@@ -229,8 +228,17 @@ def main_cityintrusion_train():
 
     plt.show()
 
+def Mycoco_eval():
+    cocoGt = COCO('./Mycoco.json')
+    cocoDt = cocoGt.loadRes('./Myresult.json')
+    cocoEval = COCOeval(cocoGt, cocoDt, 'bbox')
+    cocoEval.evaluate()
+    cocoEval.accumulate()
+    cocoEval.summarize()
+
 if __name__ == '__main__':
     #test_Mycoco()
     #main()
     #main_cityintrusion()
-    main_cityintrusion_train()
+    #main_cityintrusion_train()
+    Mycoco_eval()
