@@ -3,7 +3,7 @@ import os
 
 def main():
     file_list = getFileList()
-    json_path = "./Mycoco_train.json"
+    json_path = "./Mycoco_train_c.json"
     with open(json_path, 'r') as json_file:
         annot = json.load(json_file)
     for id, file_name in enumerate(file_list):
@@ -18,7 +18,7 @@ def main():
 
 def main_anns():
     file_list = getFileList()
-    json_path = "./Mycoco_train.json"
+    json_path = "./Mycoco_train_c.json"
     with open(json_path, 'r') as json_file:
         annot = json.load(json_file)
     for id, file_name in enumerate(file_list):
@@ -94,7 +94,7 @@ def getAnns(file_name, image_id):
 
 
 if __name__ == '__main__':
-    #main()
+    main()
     #getFileList()
     #img_name = 'munster_000056_000019_gtIntrusionCityPersons.json'
     #getImgInfo(img_name, 1)

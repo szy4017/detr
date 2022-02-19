@@ -1,0 +1,40 @@
+{
+    "info": {
+        "year": 2022,
+        "version": 1.0,
+        "description": "Cityintrusion Dataset",
+        "contributor": "Zhenyu Shi",
+        "date_created": "2022/01/04"
+    },
+    "images": [
+    ],
+    "annotations": [
+    ],
+    "categories": [
+        {
+            "supercategory": "person",
+            "id": 1,
+            "name": "pedestrian"
+        },
+        {
+            "supercategory": "person",
+            "id": 2,
+            "name": "rider"
+        },
+              {
+            "supercategory": "intrusion label",
+            "id": 3,
+            "name": "None"
+        },
+                {
+            "supercategory": "intrusion label",
+            "id": 4,
+            "name": "Non Intrusion"
+        },
+                {
+            "supercategory": "intrusion label",
+            "id": 5,
+            "name": "Intrusion"
+        }
+    ]
+}

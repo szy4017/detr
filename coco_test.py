@@ -192,7 +192,7 @@ def main_cityintrusion_train():
     print(len(train_set))
 
     # 获取标注信息
-    annFile_path = './Mycoco_train.json'
+    annFile_path = './Mycoco_train_c.json'
     coco = COCO(annFile_path)
     print(coco)
 
@@ -236,9 +236,26 @@ def Mycoco_eval():
     cocoEval.accumulate()
     cocoEval.summarize()
 
+def Mycoco_result():
+    annFile_path = './Mycoco_train_c.json'
+    coco = COCO(annFile_path)
+    cocoDt = coco.loadRes('./Myresult.json')
+    print(cocoDt.getCatIds())
+    catIds = cocoDt.getCatIds(catNms='pedestrian')
+    imgIds = cocoDt.getImgIds(catIds=catIds)
+    img_info = cocoDt.loadImgs(imgIds[np.random.randint(0, len(imgIds))])
+    print(img_info)
+    annIds = cocoDt.getAnnIds(imgIds=img_info[0]['id'])
+    print(annIds)
+    anns = cocoDt.loadAnns(annIds)
+    print(anns)
+    cocoDt.showBBox(anns)
+
+
 if __name__ == '__main__':
     #test_Mycoco()
     #main()
     #main_cityintrusion()
     #main_cityintrusion_train()
-    Mycoco_eval()
+    #Mycoco_eval()
+    Mycoco_result()
