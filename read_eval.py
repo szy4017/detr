@@ -23,6 +23,11 @@ def main():
         print(k, model[k])    
     '''
 
+def read_checkpont():
+    checkpoint_path = '/home/szy/detr/results_pretrain_complete/checkpoint0199.pth'
+    checkpoint = torch.load(checkpoint_path, map_location='cpu')
+    print(checkpoint.keys())
 
 if __name__ == '__main__':
-    main()
+    #main()
+    read_checkpont()

@@ -118,7 +118,7 @@ def main(args):
     np.random.seed(seed)
     random.seed(seed)
 
-    model, criterion, postprocessors = build_model(args)
+    model, criterion, postprocessors = build_model(args)    # 构建模型
     model.to(device)
 
     model_without_ddp = model
@@ -169,13 +169,13 @@ def main(args):
         model_without_ddp.detr.load_state_dict(checkpoint['model'])
 
     output_dir = Path(args.output_dir)
-    if args.resume:
-        if args.resume.startswith('https'):
+    if args.resume: # 从checkpoint中加载参数，checkpoint里面的参数是全，要只加载backbone和transfomer部分的参数
+        if args.resume.startswith('https'): # 从网络地址中下载并加载checkpoint
             checkpoint = torch.hub.load_state_dict_from_url(
                 args.resume, map_location='cpu', check_hash=True)
-        else:
+        else:   # 从本地路径中加载checkpoint
             checkpoint = torch.load(args.resume, map_location='cpu')
-        model_without_ddp.load_state_dict(checkpoint['model'])
+        model_without_ddp.load_state_dict(checkpoint['model'])  # 加载checkpint中的model
         print('load weight from ', args.resume)
         if not args.eval and 'optimizer' in checkpoint and 'lr_scheduler' in checkpoint and 'epoch' in checkpoint:
             optimizer.load_state_dict(checkpoint['optimizer'])

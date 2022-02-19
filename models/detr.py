@@ -34,8 +34,9 @@ class DETR(nn.Module):
         self.num_queries = num_queries
         self.transformer = transformer
         hidden_dim = transformer.d_model
-        self.class_embed = nn.Linear(hidden_dim, num_classes + 1)
-        self.bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3)
+        self.class_embed = nn.Linear(hidden_dim, num_classes + 1)   # 类别分类器
+        self.intru_state_embed = nn.Linear(hidden_dim, 3)  # 入侵状态分类器，一共有intru，non-intru，None三个类别
+        self.bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3) # 位置分类器
         self.query_embed = nn.Embedding(num_queries, hidden_dim)
         self.input_proj = nn.Conv2d(backbone.num_channels, hidden_dim, kernel_size=1)
         self.backbone = backbone
@@ -74,12 +75,14 @@ class DETR(nn.Module):
             src, mask = features[-1].decompose()
             assert mask is not None
             hs = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[0]
+            # hs是transformer后提取出来的特征，shape为[6, 2, 100, 256]，分别表示decoder层数，batch大小，设定的目标数，特征向量维度
 
-        outputs_class = self.class_embed(hs)
-        outputs_coord = self.bbox_embed(hs).sigmoid()
-        out = {'pred_logits': outputs_class[-1], 'pred_boxes': outputs_coord[-1]}
+        outputs_class = self.class_embed(hs) # hs[6, 2, 100, 256]->outputs_class[6, 2, 100, 92]，分类目标的类别
+        outputs_intru_state= self.intru_state_embed(hs) # hs[6, 2, 100, 256]->outputs_class[6, 2, 100, 3]，分类目标的入侵状态
+        outputs_coord = self.bbox_embed(hs).sigmoid() # hs[6, 2, 100, 256]->outputs_coord[6, 2, 100, 4]，分类目标的位置
+        out = {'pred_logits': outputs_class[-1], 'pred_boxes': outputs_coord[-1]}   # 最后选择transformer decoder最后一层的结果作为输出
         if self.aux_loss:
-            out['aux_outputs'] = self._set_aux_loss(outputs_class, outputs_coord)
+            out['aux_outputs'] = self._set_aux_loss(outputs_class, outputs_coord)   # 输出所有decoder层的结果，用于辅助分类器的损失计算
         return out
 
     @torch.jit.unused
