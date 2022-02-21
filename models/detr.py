@@ -80,18 +80,22 @@ class DETR(nn.Module):
         outputs_class = self.class_embed(hs) # hs[6, 2, 100, 256]->outputs_class[6, 2, 100, 92]，分类目标的类别
         outputs_intru_state= self.intru_state_embed(hs) # hs[6, 2, 100, 256]->outputs_class[6, 2, 100, 3]，分类目标的入侵状态
         outputs_coord = self.bbox_embed(hs).sigmoid() # hs[6, 2, 100, 256]->outputs_coord[6, 2, 100, 4]，分类目标的位置
-        out = {'pred_logits': outputs_class[-1], 'pred_boxes': outputs_coord[-1]}   # 最后选择transformer decoder最后一层的结果作为输出
+        #out = {'pred_logits': outputs_class[-1], 'pred_boxes': outputs_coord[-1]}   # 最后选择transformer decoder最后一层的结果作为输出
+        out = {'pred_logits': outputs_class[-1], 'pred_boxes': outputs_coord[-1], 'pred_states': outputs_intru_state[-1]}
+        #print('classes: ', outputs_class[-1, 0, :, :])
+        #print('intru: ', outputs_intru_state[-1, 0, :, :])
+
         if self.aux_loss:
-            out['aux_outputs'] = self._set_aux_loss(outputs_class, outputs_coord)   # 输出所有decoder层的结果，用于辅助分类器的损失计算
+            out['aux_outputs'] = self._set_aux_loss(outputs_class, outputs_coord, outputs_intru_state)   # 输出所有decoder层的结果，用于辅助分类器的损失计算
         return out
 
     @torch.jit.unused
-    def _set_aux_loss(self, outputs_class, outputs_coord):
+    def _set_aux_loss(self, outputs_class, outputs_coord, outputs_intru_state):
         # this is a workaround to make torchscript happy, as torchscript
         # doesn't support dictionary with non-homogeneous values, such
         # as a dict having both a Tensor and a list.
-        return [{'pred_logits': a, 'pred_boxes': b}
-                for a, b in zip(outputs_class[:-1], outputs_coord[:-1])]
+        return [{'pred_logits': a, 'pred_boxes': b, "pred_states": c}
+                for a, b, c in zip(outputs_class[:-1], outputs_coord[:-1], outputs_intru_state[:-1])]
 
 
 class SetCriterion(nn.Module):
@@ -116,8 +120,10 @@ class SetCriterion(nn.Module):
         self.eos_coef = eos_coef
         self.losses = losses
         empty_weight = torch.ones(self.num_classes + 1)
+        state_empty_weight = torch.ones(3)
         empty_weight[-1] = self.eos_coef
-        self.register_buffer('empty_weight', empty_weight)
+        self.register_buffer('empty_weight', empty_weight)  # 设置模型中的参数不更新，并且参数能够保存下来，通过register_buffer登记过的张量：会自动成为模型中的参数，随着模型移动（gpu/cpu）而移动，但是不会随着梯度进行更新。
+        self.register_buffer('state_empty_weight', state_empty_weight)
 
     def loss_labels(self, outputs, targets, indices, num_boxes, log=True):
         """Classification loss (NLL)
@@ -138,6 +144,30 @@ class SetCriterion(nn.Module):
         if log:
             # TODO this should probably be a separate loss, not hacked in this one here
             losses['class_error'] = 100 - accuracy(src_logits[idx], target_classes_o)[0]
+        return losses
+
+    # 计算
+    def loss_states(self, outputs, targets, indices, num_boxes, log=True):
+        """State loss (NLL)
+        targets dicts must contain the key "states" containing a tensor of dim [nb_target_boxes]
+        """
+        assert 'pred_states' in outputs
+        src_states = outputs['pred_states']
+
+        idx = self._get_src_permutation_idx(indices)
+        target_states_o = torch.cat([t["states"][J] for t, (_, J) in zip(targets, indices)])
+        target_states = torch.full(src_states.shape[:2], -1,
+                                    dtype=torch.int64, device=src_states.device)
+        target_states[idx] = target_states_o
+
+        # 在计算cross_entropy损失时，target数据必须>0，不然会出现数据丢失的bug，loss也计算不出来
+        # 由于states的标签为[-1, 0, 1]，所以需要target_states+1变成[0, 1, 2]
+        loss_se = F.cross_entropy(src_states.transpose(1, 2), target_states+1, self.state_empty_weight)
+        losses = {'loss_se': loss_se}
+
+        if log:
+            # TODO this should probably be a separate loss, not hacked in this one here
+            losses['state_error'] = 100 - accuracy(src_states[idx], target_states_o)[0]
         return losses
 
     @torch.no_grad()
@@ -221,7 +251,8 @@ class SetCriterion(nn.Module):
             'labels': self.loss_labels,
             'cardinality': self.loss_cardinality,
             'boxes': self.loss_boxes,
-            'masks': self.loss_masks
+            'masks': self.loss_masks,
+            'states': self.loss_states, # 添加入侵状态loss的计算
         }
         assert loss in loss_map, f'do you really want to compute {loss} loss?'
         return loss_map[loss](outputs, targets, indices, num_boxes, **kwargs)
@@ -236,6 +267,7 @@ class SetCriterion(nn.Module):
         outputs_without_aux = {k: v for k, v in outputs.items() if k != 'aux_outputs'}
 
         # Retrieve the matching between the outputs of the last layer and the targets
+        # 检索transformer decoder最后一层的输出与目标之间的匹配
         indices = self.matcher(outputs_without_aux, targets)
 
         # Compute the average number of target boxes accross all nodes, for normalization purposes
@@ -361,7 +393,8 @@ def build(args):
             aux_weight_dict.update({k + f'_{i}': v for k, v in weight_dict.items()})
         weight_dict.update(aux_weight_dict)
 
-    losses = ['labels', 'boxes', 'cardinality']
+    #losses = ['labels', 'boxes', 'cardinality']
+    losses = ['labels', 'boxes', 'cardinality', 'states']
     if args.masks:
         losses += ["masks"]
     criterion = SetCriterion(num_classes, matcher=matcher, weight_dict=weight_dict,

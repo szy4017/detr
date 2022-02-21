@@ -64,12 +64,16 @@ def get_args_parser():
     parser.add_argument('--no_aux_loss', dest='aux_loss', action='store_false',
                         help="Disables auxiliary decoding losses (loss at each layer)")
     # * Matcher
+    # 设置各个损失函数的权重系数
     parser.add_argument('--set_cost_class', default=1, type=float,
                         help="Class coefficient in the matching cost")
     parser.add_argument('--set_cost_bbox', default=5, type=float,
                         help="L1 box coefficient in the matching cost")
     parser.add_argument('--set_cost_giou', default=2, type=float,
                         help="giou box coefficient in the matching cost")
+    # 添加入侵状态损失的权重系数
+    parser.add_argument('--set_cost_state', default=1, type=float,
+                        help="State coefficient in the matching cost")
     # * Loss coefficients
     parser.add_argument('--mask_loss_coef', default=1, type=float)
     parser.add_argument('--dice_loss_coef', default=1, type=float)
@@ -118,7 +122,7 @@ def main(args):
     np.random.seed(seed)
     random.seed(seed)
 
-    model, criterion, postprocessors = build_model(args)    # 构建模型
+    model, criterion, postprocessors = build_model(args)    # 构建模型，model是模型，criterion是用于计算损失函数
     model.to(device)
 
     model_without_ddp = model
@@ -139,7 +143,7 @@ def main(args):
                                   weight_decay=args.weight_decay)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.lr_drop)
 
-    dataset_train = build_dataset(image_set='train', args=args)
+    dataset_train = build_dataset(image_set='train', args=args) # 构建训练集
     dataset_val = build_dataset(image_set='val', args=args)
 
     if args.distributed:
@@ -198,7 +202,7 @@ def main(args):
             model, criterion, data_loader_train, optimizer, device, epoch,
             args.clip_max_norm)
         lr_scheduler.step()
-        if args.output_dir:
+        if args.output_dir: # 保存模型输出，包括模型参数和训练过程的数据记录
             checkpoint_paths = [output_dir / 'checkpoint.pth']
             # extra checkpoint before LR drop and every 100 epochs
             if (epoch + 1) % args.lr_drop == 0 or (epoch + 1) % 100 == 0:
@@ -211,6 +215,7 @@ def main(args):
                     'epoch': epoch,
                     'args': args,
                 }, checkpoint_path)
+                # model的数据类型为OrderedDict，是一种有序的dict结构
 
         test_stats, coco_evaluator = evaluate(
             model, criterion, postprocessors, data_loader_val, base_ds, device, args.output_dir
@@ -246,6 +251,7 @@ if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
     # for evaluation
+    '''
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
     args.output_dir = './results'
@@ -256,15 +262,16 @@ if __name__ == '__main__':
     args.eval = True
     #args.resume = '/home/szy/detr/checkpoints/detr-r50-e632da11.pth'
     #args.resume = '/home/szy/detr/results/checkpoint0299.pth'
-    args.resume = '/home/szy/detr/results_pretrain_complete/checkpoint0199.pth'
+    #args.resume = '/home/szy/detr/results_pretrain_complete/checkpoint0199.pth'
+    args.resume = '/home/szy/detr/intru_checkpoint.pth'
     #args.dataset_file = 'coco'
     args.dataset_file = 'intruscapes'
     #args.coco_path = '/home/szy/data/coco'
     args.coco_path = '/home/szy/data/intruscapes'
     main(args)
+    '''
 
     # for training
-    '''
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
     args.output_dir = './results_pretrain_complete'
@@ -272,8 +279,8 @@ if __name__ == '__main__':
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     args.batch_size = 4
     args.no_aux_loss = True
-    args.resume = '/home/szy/detr/checkpoints/detr-r50-e632da11.pth'
+    #args.resume = '/home/szy/detr/checkpoints/detr-r50-e632da11.pth'
+    args.resume = '/home/szy/detr/intru_checkpoint.pth'
     args.dataset_file = 'intruscapes'
     args.coco_path = '/home/szy/data/intruscapes'
     main(args)
-    '''
