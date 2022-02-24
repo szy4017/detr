@@ -57,7 +57,7 @@ class DETR(nn.Module):
                - "aux_outputs": Optional, only returned when auxilary losses are activated. It is a list of
                                 dictionnaries containing the two above keys for each decoder layer.
         """
-        '''
+
         if isinstance(samples, (list, torch.Tensor)):
             samples = nested_tensor_from_tensor_list(samples)
         features, pos = self.backbone(samples)
@@ -65,8 +65,9 @@ class DETR(nn.Module):
         src, mask = features[-1].decompose()
         assert mask is not None
         hs = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[0]        
-        '''
 
+        '''
+        # 不计算backbone和transformer部分的梯度，只训练分类器
         with torch.no_grad():
             if isinstance(samples, (list, torch.Tensor)):
                 samples = nested_tensor_from_tensor_list(samples)
@@ -74,8 +75,10 @@ class DETR(nn.Module):
 
             src, mask = features[-1].decompose()
             assert mask is not None
-            hs = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[0]
             # hs是transformer后提取出来的特征，shape为[6, 2, 100, 256]，分别表示decoder层数，batch大小，设定的目标数，特征向量维度
+            hs = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[0]
+        '''
+
 
         outputs_class = self.class_embed(hs) # hs[6, 2, 100, 256]->outputs_class[6, 2, 100, 92]，分类目标的类别
         outputs_intru_state= self.intru_state_embed(hs) # hs[6, 2, 100, 256]->outputs_class[6, 2, 100, 3]，分类目标的入侵状态
