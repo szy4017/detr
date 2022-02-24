@@ -251,6 +251,7 @@ if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
     # for evaluation
+    '''
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
     args.output_dir = './results'
@@ -268,19 +269,18 @@ if __name__ == '__main__':
     #args.coco_path = '/home/szy/data/coco'
     args.coco_path = '/home/szy/data/intruscapes'
     main(args)
+    '''
 
     # for training
-    '''
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
-    args.output_dir = './results_pretrain_state_finetune'
+    args.output_dir = './results_pretrain_state_overall'
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     args.batch_size = 4
     args.no_aux_loss = True
     #args.resume = '/home/szy/detr/checkpoints/detr-r50-e632da11.pth'
-    args.resume = '/home/szy/detr/intru_checkpoint.pth'
+    #args.resume = '/home/szy/detr/intru_checkpoint.pth'
     args.dataset_file = 'intruscapes'
     args.coco_path = '/home/szy/data/intruscapes'
     main(args)
-    '''

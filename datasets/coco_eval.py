@@ -33,6 +33,7 @@ class CocoEvaluator(object):
         self.img_ids = []
         self.eval_imgs = {k: [] for k in iou_types}
 
+    # update将coco_dt存入coco_eval中，然后进行coco_eval.accumulate()和coco_eval.summarize()就可以得到评估结果了
     def update(self, predictions):
         img_ids = list(np.unique(list(predictions.keys())))
         self.img_ids.extend(img_ids)
