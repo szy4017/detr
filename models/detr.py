@@ -315,13 +315,17 @@ class PostProcess(nn.Module):
                           For evaluation, this must be the original image size (before any data augmentation)
                           For visualization, this should be the image size after data augment, but before padding
         """
-        out_logits, out_bbox = outputs['pred_logits'], outputs['pred_boxes']
+        #out_logits, out_bbox = outputs['pred_logits'], outputs['pred_boxes']
+        # 增加out_states
+        out_logits, out_bbox, out_states = outputs['pred_logits'], outputs['pred_boxes'], outputs['pred_states']
 
         assert len(out_logits) == len(target_sizes)
         assert target_sizes.shape[1] == 2
 
-        prob = F.softmax(out_logits, -1)
-        scores, labels = prob[..., :-1].max(-1)
+        prob = F.softmax(out_logits, -1)    # 进行softmax得到每个类别的概率
+        s_prob = F.softmax(out_states, -1)  # 进行softmax得到每个入侵状态类别的概率
+        scores, labels = prob[..., :-1].max(-1) # 根据类别概率分布，得到目标的类别和置信度得分，置信度得分就是属于这个类别的概率
+        s_scores, s_labels = s_prob[..., :-1].max(-1)   # 同理得到目标的入侵状态类别和置信度得分
 
         # convert to [x0, y0, x1, y1] format
         boxes = box_ops.box_cxcywh_to_xyxy(out_bbox)
@@ -330,7 +334,8 @@ class PostProcess(nn.Module):
         scale_fct = torch.stack([img_w, img_h, img_w, img_h], dim=1)
         boxes = boxes * scale_fct[:, None, :]
 
-        results = [{'scores': s, 'labels': l, 'boxes': b} for s, l, b in zip(scores, labels, boxes)]
+        results = [{'scores': s, 'labels': l, 'boxes': b, 's_scores': ss, 's_labels': sl}
+                   for s, l, b, ss, sl in zip(scores, labels, boxes, s_scores, s_labels)]
 
         return results
 

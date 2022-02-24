@@ -65,11 +65,13 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
 
+# 对模型进行性能测试
 @torch.no_grad()
 def evaluate(model, criterion, postprocessors, data_loader, base_ds, device, output_dir):
     model.eval()
     criterion.eval()
 
+    # 对测试结果进行记录
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter('class_error', utils.SmoothedValue(window_size=1, fmt='{value:.2f}'))
     header = 'Test:'
@@ -87,7 +89,7 @@ def evaluate(model, criterion, postprocessors, data_loader, base_ds, device, out
         )
 
     for samples, targets in metric_logger.log_every(data_loader, 10, header):
-        samples = samples.to(device)
+        samples = samples.to(device)    # sample是测试集的图像数据
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
         outputs = model(samples)
@@ -106,12 +108,12 @@ def evaluate(model, criterion, postprocessors, data_loader, base_ds, device, out
         metric_logger.update(class_error=loss_dict_reduced['class_error'])
 
         orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)
-        results = postprocessors['bbox'](outputs, orig_target_sizes)
+        results = postprocessors['bbox'](outputs, orig_target_sizes)    # results={'scores': [100], 'label': [100], 'boxes': [100, 4]}模型预测结果
         if 'segm' in postprocessors.keys():
             target_sizes = torch.stack([t["size"] for t in targets], dim=0)
             results = postprocessors['segm'](results, outputs, orig_target_sizes, target_sizes)
-        res = {target['image_id'].item(): output for target, output in zip(targets, results)}
-        if coco_evaluator is not None:
+        res = {target['image_id'].item(): output for target, output in zip(targets, results)}   # res={id: {scores, labels, boxes}}将results和image_id相互对应
+        if coco_evaluator is not None:  # 更新coco_evaluator结果
             coco_evaluator.update(res)
 
         if panoptic_evaluator is not None:

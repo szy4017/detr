@@ -38,7 +38,7 @@ class CocoEvaluator(object):
         self.img_ids.extend(img_ids)
 
         for iou_type in self.iou_types:
-            results = self.prepare(predictions, iou_type)
+            results = self.prepare(predictions, iou_type)   # 得到COCO形式的results<dict>
 
             # suppress pycocotools prints
             with open(os.devnull, 'w') as devnull:
@@ -76,6 +76,7 @@ class CocoEvaluator(object):
         else:
             raise ValueError("Unknown iou type {}".format(iou_type))
 
+    # 将预测模型的预测结果转换成COCO形式
     def prepare_for_coco_detection(self, predictions):
         coco_results = []
         for original_id, prediction in predictions.items():
@@ -86,7 +87,11 @@ class CocoEvaluator(object):
             boxes = convert_to_xywh(boxes).tolist()
             scores = prediction["scores"].tolist()
             labels = prediction["labels"].tolist()
+            # 增加s_scores和s_labels，表示入侵状态预测的状态类别标签和置信度
+            s_scores = prediction["s_scores"].tolist()
+            s_labels = prediction["s_labels"].tolist()
 
+            # 生成COCO形式的字典，增加state和state_score字段
             coco_results.extend(
                 [
                     {
@@ -94,6 +99,8 @@ class CocoEvaluator(object):
                         "category_id": labels[k],
                         "bbox": box,
                         "score": scores[k],
+                        "state": s_labels[k],
+                        "state_score": s_scores[k]
                     }
                     for k, box in enumerate(boxes)
                 ]

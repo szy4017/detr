@@ -47,6 +47,13 @@ def read_checkpoint():
     torch.save({'model': M.state_dict()}, path)
 
 
+def read_eval():
+    eval_path = '/home/szy/detr/results_pretrain_state_finetune/eval/latest.pth'
+    eval = torch.load(eval_path, map_location='cpu')
+    for key in eval.keys():
+        print(key)
+
+
 def build_new_model():
     import os
     from main import get_args_parser
@@ -79,7 +86,7 @@ def build_new_model():
 
 def read_log():
     import json
-    log_path = '/home/szy/detr/results_pretrain_state/log.txt'
+    log_path = '/home/szy/detr/results_pretrain_state_finetune/log.txt'
     log_file = open(log_path, 'r')
     data_dict_1 = {'train_class_error': [], 'train_state_error_unscaled': [], 'epoch': []}
     data_dict_2 = {'train_loss_ce': [], 'train_loss_se_unscaled': [], 'epoch': []}
@@ -109,14 +116,14 @@ def read_log():
             if key == 'test_class_error':
                 data_dict_3[key].append(log_dic[key])
 
-    plot(data_dict_1)
+    plot(data_dict_4)
 
 
 def plot(data_dict):
     import matplotlib.pyplot as plt
 
     plt.figure(figsize=(10, 5))  # 设置画布的尺寸
-    plt.title('Class and State error', fontsize=20)  # 标题，并设定字号大小
+    plt.title('State train and test error', fontsize=20)  # 标题，并设定字号大小
     plt.xlabel(u'epoch', fontsize=14)  # 设置x轴，并设定字号大小
     plt.ylabel(u'error', fontsize=14)  # 设置y轴，并设定字号大小
 
@@ -135,7 +142,7 @@ def plot(data_dict):
         i = i+1
 
     plt.legend(loc=2)  # 图例展示位置，数字代表第几象限
-    plt.savefig('./1.png')  # 保存图片
+    plt.savefig('./4.png')  # 保存图片
     plt.show()  # 显示图像
 
 
@@ -143,4 +150,5 @@ if __name__ == '__main__':
     #main()
     #read_checkpoint()
     #build_new_model()
-    read_log()
+    #read_log()
+    read_eval()
