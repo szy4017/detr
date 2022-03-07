@@ -27,11 +27,14 @@ class CocoEvaluator(object):
 
         self.iou_types = iou_types
         self.coco_eval = {}
+        self.coco_eval_state = {}   # 存储eval state的相关信息
         for iou_type in iou_types:
             self.coco_eval[iou_type] = COCOeval(coco_gt, iouType=iou_type)
+            self.coco_eval_state[iou_type] = COCOeval(coco_gt, iouType=iou_type)
 
         self.img_ids = []
         self.eval_imgs = {k: [] for k in iou_types}
+        self.eval_imgs_state = {h: [] for h in iou_types}   # 存储eval state的相关信息
 
     # update将coco_dt存入coco_eval中，然后进行coco_eval.accumulate()和coco_eval.summarize()就可以得到评估结果了
     def update(self, predictions):
@@ -46,25 +49,53 @@ class CocoEvaluator(object):
                 with contextlib.redirect_stdout(devnull):
                     coco_dt = COCO.loadRes(self.coco_gt, results) if results else COCO()
             coco_eval = self.coco_eval[iou_type]
+            coco_eval_state = self.coco_eval_state[iou_type]
 
             coco_eval.cocoDt = coco_dt
+            coco_eval_state.cocoDt = coco_dt
             coco_eval.params.imgIds = list(img_ids)
+            coco_eval_state.params.imgIds = list(img_ids)
             img_ids, eval_imgs = evaluate(coco_eval)
+            img_ids_state, eval_imgs_state = evaluatestate(coco_eval_state)   # 评估入侵状态标签
 
             self.eval_imgs[iou_type].append(eval_imgs)
+            self.eval_imgs_state[iou_type].append(eval_imgs_state)
 
+    # 将所有self.eval_imgs的数据进行同步
     def synchronize_between_processes(self):
         for iou_type in self.iou_types:
             self.eval_imgs[iou_type] = np.concatenate(self.eval_imgs[iou_type], 2)
             create_common_coco_eval(self.coco_eval[iou_type], self.img_ids, self.eval_imgs[iou_type])
 
+    # 将所有self.eval_imgs_state的数据进行同步
+    # 基于synchronize_between_processes修改得到
+    def synchronize_between_processes_state(self):
+        for iou_type in self.iou_types:
+            self.eval_imgs_state[iou_type] = np.concatenate(self.eval_imgs_state[iou_type], 2)
+            create_common_coco_eval(self.coco_eval_state[iou_type], self.img_ids, self.eval_imgs_state[iou_type])
+
+    # 将coco_eval的值进行累计
     def accumulate(self):
         for coco_eval in self.coco_eval.values():
             coco_eval.accumulate()
 
+    # 将coco_eval_state的值进行累计
+    # 基于accumulate修改得到
+    def accumulate_state(self):
+        for coco_eval in self.coco_eval_state.values():
+            coco_eval.accumulate_state()
+
+    # 总结eval结果，并输出最终结果
     def summarize(self):
         for iou_type, coco_eval in self.coco_eval.items():
             print("IoU metric: {}".format(iou_type))
+            coco_eval.summarize()
+
+    # 总结eval结果，并输出最终结果
+    # 基于summarize修改得到
+    def summarize_state(self):
+        for iou_type, coco_eval in self.coco_eval_state.items():
+            print("State IoU metric: {}".format(iou_type))
             coco_eval.summarize()
 
     def prepare(self, predictions, iou_type):
@@ -213,6 +244,8 @@ def create_common_coco_eval(coco_eval, img_ids, eval_imgs):
 #################################################################
 
 
+# 设置了自己的evaluate函数，而没有采用COCO API中的COCOeval.evaluate，
+# 但是调用了COCOeval.evaluateImg进行单张图片单个类别的evaluate
 def evaluate(self):
     '''
     Run per image evaluation on given images and store results (a list of dict) in self.evalImgs
@@ -236,6 +269,7 @@ def evaluate(self):
     # loop through images, area range, max detection number
     catIds = p.catIds if p.useCats else [-1]
 
+    # 计算IoU，保存在self.ious中，evaluateImg是根据self.ious的数据进行评估匹配的
     if p.iouType == 'segm' or p.iouType == 'bbox':
         computeIoU = self.computeIoU
     elif p.iouType == 'keypoints':
@@ -255,6 +289,57 @@ def evaluate(self):
     ]
     # this is NOT in the pycocotools code, but could be done outside
     evalImgs = np.asarray(evalImgs).reshape(len(catIds), len(p.areaRng), len(p.imgIds))
+    self._paramsEval = copy.deepcopy(self.params)
+    # toc = time.time()
+    # print('DONE (t={:0.2f}s).'.format(toc-tic))
+    return p.imgIds, evalImgs
+
+
+# 设置了自己的evaluate函数，而没有采用COCO API中的COCOeval.evaluate，
+# 但是调用了COCOeval.evaluateImg进行单张图片单个类别的evaluate
+# 基于evaluate()修改的evaluatestate()，对state标签进行evaluate
+def evaluatestate(self):
+    '''
+    Run per image evaluation on given images and store results (a list of dict) in self.evalImgs
+    :return: None
+    '''
+    # tic = time.time()
+    # print('Running per image evaluation...')
+    p = self.params
+    # add backward compatibility if useSegm is specified in params
+    if p.useSegm is not None:
+        p.iouType = 'segm' if p.useSegm == 1 else 'bbox'
+        print('useSegm (deprecated) is not None. Running {} evaluation'.format(p.iouType))
+    # print('Evaluate annotation type *{}*'.format(p.iouType))
+    p.imgIds = list(np.unique(p.imgIds))
+    p.staIds = list(np.unique(p.staIds))
+    p.maxDets = sorted(p.maxDets)
+    self.params = p
+
+    self._prepare()
+    # loop through images, area range, max detection number
+    staIds = p.staIds
+
+    # 计算IoU，保存在self.ious中，evaluateImg是根据self.ious的数据进行评估匹配的
+    if p.iouType == 'segm' or p.iouType == 'bbox':
+        computeIoU = self.computeIoU
+    elif p.iouType == 'keypoints':
+        computeIoU = self.computeOks
+    self.ious = {
+        (imgId, staId): computeIoU(imgId, staId)
+        for imgId in p.imgIds
+        for staId in staIds}
+
+    evaluateImgState = self.evaluateImgState
+    maxDet = p.maxDets[-1]
+    evalImgs = [
+        evaluateImgState(imgId, staId, areaRng, maxDet)
+        for staId in staIds
+        for areaRng in p.areaRng
+        for imgId in p.imgIds
+    ]
+    # this is NOT in the pycocotools code, but could be done outside
+    evalImgs = np.asarray(evalImgs).reshape(len(staIds), len(p.areaRng), len(p.imgIds))
     self._paramsEval = copy.deepcopy(self.params)
     # toc = time.time()
     # print('DONE (t={:0.2f}s).'.format(toc-tic))

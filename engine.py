@@ -131,6 +131,7 @@ def evaluate(model, criterion, postprocessors, data_loader, base_ds, device, out
     print("Averaged stats:", metric_logger)
     if coco_evaluator is not None:
         coco_evaluator.synchronize_between_processes()
+        coco_evaluator.synchronize_between_processes_state()
     if panoptic_evaluator is not None:
         panoptic_evaluator.synchronize_between_processes()
 
@@ -138,6 +139,8 @@ def evaluate(model, criterion, postprocessors, data_loader, base_ds, device, out
     if coco_evaluator is not None:
         coco_evaluator.accumulate()
         coco_evaluator.summarize()
+        coco_evaluator.accumulate_state()
+        coco_evaluator.summarize_state()
     panoptic_res = None
     if panoptic_evaluator is not None:
         panoptic_res = panoptic_evaluator.summarize()
