@@ -224,7 +224,7 @@ def main_cityintrusion_train():
     print(anns)
     print(anns[0]['bbox'])
     coco.showBBox(anns)
-    #coco.showIntrusion(anns)
+    coco.showIntrusion(anns)
 
     plt.show()
 
@@ -249,7 +249,19 @@ def Mycoco_result():
     print(annIds)
     anns = cocoDt.loadAnns(annIds)
     print(anns)
+
+    root_path = '/home/szy/data/cityscape/leftImg8bit/train'
+    file_name = img_info[0]['file_name']
+    city_name = file_name.split('_')[0]
+    imgPath = os.path.join(root_path, city_name)
+    imgPath = os.path.join(imgPath, file_name)
+    print(imgPath)
+    img = cv.imread(imgPath)
+    plt.imshow(bgr2rgb(img))
+
     cocoDt.showBBox(anns)
+
+    plt.show()
 
 
 if __name__ == '__main__':

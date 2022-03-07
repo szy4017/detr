@@ -11,6 +11,8 @@ import contextlib
 import copy
 import numpy as np
 import torch
+from matplotlib import pyplot as plt
+import cv2 as cv
 
 from pycocotools.cocoeval import COCOeval
 from pycocotools.coco import COCO
@@ -43,6 +45,7 @@ class CocoEvaluator(object):
 
         for iou_type in self.iou_types:
             results = self.prepare(predictions, iou_type)   # 得到COCO形式的results<dict>
+            #results = self.show_result(results)
 
             # suppress pycocotools prints
             with open(os.devnull, 'w') as devnull:
@@ -60,6 +63,41 @@ class CocoEvaluator(object):
 
             self.eval_imgs[iou_type].append(eval_imgs)
             self.eval_imgs_state[iou_type].append(eval_imgs_state)
+
+    # 显示预测结果
+    def show_result(self, results):
+        # 删去results中score比较低的对象
+        res_list = []
+        for res in results:
+            if res['score'] > 0.5:
+                res_list.append(res)
+        results = res_list
+        return results
+
+        coco = self.coco_gt
+        cocoRes = coco.loadRes(results)
+        catIds = cocoRes.getCatIds(catNms='pedestrian')
+        imgIds = cocoRes.getImgIds(catIds=catIds)
+        img_info = cocoRes.loadImgs(imgIds[np.random.randint(0, len(imgIds))])
+        annIds = cocoRes.getAnnIds(imgIds=img_info[0]['id'])
+        anns = cocoRes.loadAnns(annIds)
+
+        root_path = '/home/szy/data/cityscape/leftImg8bit/val'
+        file_name = img_info[0]['file_name']
+        city_name = file_name.split('_')[0]
+        imgPath = os.path.join(root_path, city_name)
+        imgPath = os.path.join(imgPath, file_name)
+        print(imgPath)
+        img = cv.imread(imgPath)
+
+        plt.title('Class Prediction')
+        plt.imshow(bgr2rgb(img))
+        cocoRes.showBBox(anns)
+        plt.show()
+        plt.title('State Prediction')
+        plt.imshow(bgr2rgb(img))
+        cocoRes.showIntrusion(anns)
+        plt.show()
 
     # 将所有self.eval_imgs的数据进行同步
     def synchronize_between_processes(self):
@@ -200,6 +238,11 @@ class CocoEvaluator(object):
             )
         return coco_results
 
+# 用于图像的色彩通道转换
+def bgr2rgb(img):
+    # 用cv自带的分割和合并函数
+    B, G, R = cv.split(img)
+    return cv.merge([R, G, B])
 
 def convert_to_xywh(boxes):
     xmin, ymin, xmax, ymax = boxes.unbind(1)
@@ -344,6 +387,7 @@ def evaluatestate(self):
     # toc = time.time()
     # print('DONE (t={:0.2f}s).'.format(toc-tic))
     return p.imgIds, evalImgs
+
 
 #################################################################
 # end of straight copy from pycocotools, just removing the prints
