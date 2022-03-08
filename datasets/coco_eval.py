@@ -45,7 +45,7 @@ class CocoEvaluator(object):
 
         for iou_type in self.iou_types:
             results = self.prepare(predictions, iou_type)   # 得到COCO形式的results<dict>
-            #results = self.show_result(results)
+            #self.show_result(results)
 
             # suppress pycocotools prints
             with open(os.devnull, 'w') as devnull:
@@ -72,7 +72,7 @@ class CocoEvaluator(object):
             if res['score'] > 0.5:
                 res_list.append(res)
         results = res_list
-        return results
+        #return results
 
         coco = self.coco_gt
         cocoRes = coco.loadRes(results)
