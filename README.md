@@ -2,6 +2,35 @@
 ========
 PyTorch training code and pretrained models for **DETR** (**DE**tection **TR**ansformer).
 We replace the full complex hand-crafted object detection pipeline with a Transformer, and match Faster R-CNN with a ResNet-50, obtaining **42 AP** on COCO using half the computation power (FLOPs) and the same number of parameters. Inference in 50 lines of PyTorch.
+Tips: label information.
+```
+"categories": [
+        {
+            "supercategory": "person",
+            "id": 1,
+            "name": "pedestrian"
+        },
+        {
+            "supercategory": "person",
+            "id": 2,
+            "name": "rider"
+        }
+    ],
+    "intrusion_states": [
+        {
+            "id": 0,
+            "name": "None"
+        },
+        {
+            "id": 1,
+            "name": "Non Intrusion"
+        },
+        {
+            "id": 2,
+            "name": "Intrusion"
+        }
+    ]
+```
 
 ![DETR](.github/DETR.png)
 
