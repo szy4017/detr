@@ -35,8 +35,10 @@ class DETR(nn.Module):
         self.num_queries = num_queries
         self.transformer = transformer
         hidden_dim = transformer.d_model
-        self.class_embed = nn.Linear(hidden_dim, num_classes + 1)   # 类别分类器
-        self.intru_state_embed = nn.Linear(hidden_dim, 3)  # 入侵状态分类器，一共有intru，non-intru，None三个类别
+        #self.class_embed = nn.Linear(hidden_dim, num_classes + 1)   # 类别分类器
+        self.class_embed = mlp_cls()
+        #self.intru_state_embed = nn.Linear(hidden_dim, 3)  # 入侵状态分类器，一共有intru，non-intru，None三个类别
+        self.intru_state_embed = mlp_sta()
         self.bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3) # 位置分类器
         self.query_embed = nn.Embedding(num_queries, hidden_dim)
         self.input_proj = nn.Conv2d(backbone.num_channels, hidden_dim, kernel_size=1)
@@ -84,8 +86,8 @@ class DETR(nn.Module):
             hs = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[0]
         '''
 
-        outputs_class = self.class_embed(hs) # hs[6, 2, 100, 256]->outputs_class[6, 2, 100, 92]，分类目标的类别
-        outputs_intru_state= self.intru_state_embed(hs) # hs[6, 2, 100, 256]->outputs_class[6, 2, 100, 3]，分类目标的入侵状态
+        feature_class, outputs_class = self.class_embed(hs) # hs[6, 2, 100, 256]->outputs_class[6, 2, 100, 92]，分类目标的类别
+        outputs_intru_state= self.intru_state_embed(hs, feature_class) # hs[6, 2, 100, 256]->outputs_class[6, 2, 100, 3]，分类目标的入侵状态
         outputs_coord = self.bbox_embed(hs).sigmoid() # hs[6, 2, 100, 256]->outputs_coord[6, 2, 100, 4]，分类目标的位置
         #out = {'pred_logits': outputs_class[-1], 'pred_boxes': outputs_coord[-1]}   # 最后选择transformer decoder最后一层的结果作为输出
         out = {'pred_logits': outputs_class[-1], 'pred_boxes': outputs_coord[-1], 'pred_states': outputs_intru_state[-1]}
@@ -362,6 +364,32 @@ class MLP(nn.Module):
             x = F.relu(layer(x)) if i < self.num_layers - 1 else layer(x)
         return x
 
+class mlp_cls(nn.Module):
+    """ A simple multi-layer perceptron for class classification."""
+
+    def __init__(self, input_dim=256, hidden_dim=128, output_dim=3):
+        super().__init__()
+        self.layer1 = nn.Linear(input_dim, hidden_dim)
+        self.layer2 = nn.Linear(hidden_dim, output_dim)
+
+    def forward(self, x):
+        x_h = F.relu(self.layer1(x))
+        out = self.layer2(x_h)
+        return x_h, out
+
+class mlp_sta(nn.Module):
+    """ A simple multi-layer perceptron for state classification."""
+
+    def __init__(self, input_dim=256, hidden_dim=128, output_dim=3):
+        super().__init__()
+        self.layer1 = nn.Linear(input_dim, hidden_dim)
+        self.layer2 = nn.Linear(input_dim, output_dim)
+
+    def forward(self, x, y):
+        x = F.relu(self.layer1(x))
+        x_h = torch.cat((x, y), -1)
+        out = self.layer2(x_h)
+        return out
 
 def build(args):
     # the `num_classes` naming here is somewhat misleading.
