@@ -5,6 +5,7 @@ DETR model and criterion classes.
 import torch
 import torch.nn.functional as F
 from torch import nn
+import numpy as np
 
 from util import box_ops
 from util.misc import (NestedTensor, nested_tensor_from_tensor_list,
@@ -49,7 +50,10 @@ class DETR(nn.Module):
 
             It returns a dict with the following elements:
                - "pred_logits": the classification logits (including no-object) for all queries.
-                                Shape= [batch_size x num_queries x (num_classes + 1)]
+                                Shape = [batch_size x num_queries x (num_classes + 1)]
+               - "pred_states": the classification states for all queries. The states include 'None',
+                                'Non Intrusion' and 'Intrusion'.
+                                Shape = [batch_size x num_queries x 3]
                - "pred_boxes": The normalized boxes coordinates for all queries, represented as
                                (center_x, center_y, height, width). These values are normalized in [0, 1],
                                relative to the size of each individual image (disregarding possible padding).
@@ -64,7 +68,8 @@ class DETR(nn.Module):
 
         src, mask = features[-1].decompose()
         assert mask is not None
-        hs = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[0]        
+        hs = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[0]
+        # hs[6, 2, 100, 256]->[decoder_layer, batch_size, query_num, feature_vector]
 
         '''
         # 不计算backbone和transformer部分的梯度，只训练分类器
@@ -78,7 +83,6 @@ class DETR(nn.Module):
             # hs是transformer后提取出来的特征，shape为[6, 2, 100, 256]，分别表示decoder层数，batch大小，设定的目标数，特征向量维度
             hs = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[0]
         '''
-
 
         outputs_class = self.class_embed(hs) # hs[6, 2, 100, 256]->outputs_class[6, 2, 100, 92]，分类目标的类别
         outputs_intru_state= self.intru_state_embed(hs) # hs[6, 2, 100, 256]->outputs_class[6, 2, 100, 3]，分类目标的入侵状态
@@ -327,6 +331,10 @@ class PostProcess(nn.Module):
         scores, labels = prob[..., :-1].max(-1) # 根据类别概率分布，得到目标的类别和置信度得分，置信度得分就是属于这个类别的概率
         s_scores, s_labels = s_prob[..., :-1].max(-1)   # 同理得到目标的入侵状态类别和置信度得分
 
+        # 保存原始输出为txt
+        save_logits = prob.cpu().numpy().reshape(-1, prob.shape[-1])
+        save_states = s_prob.cpu().numpy().reshape(-1, s_prob.shape[-1])
+
         # convert to [x0, y0, x1, y1] format
         boxes = box_ops.box_cxcywh_to_xyxy(out_bbox)
         # and from relative [0, 1] to absolute [0, height] coordinates
@@ -364,8 +372,10 @@ def build(args):
     # you should pass `num_classes` to be 2 (max_obj_id + 1).
     # For more details on this, check the following discussion
     # https://github.com/facebookresearch/detr/issues/108#issuecomment-650269223
-    if args.dataset_file == 'coco' or args.dataset_file == 'intruscapes':
+    if args.dataset_file == 'coco':
         num_classes = 91
+    elif args.dataset_file == 'intruscapes':
+        num_classes = 2
     else:
         num_classes = 20
     #num_classes = 20 if args.dataset_file != 'coco' else 91
