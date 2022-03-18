@@ -23,27 +23,28 @@ def main():
         print(k, model[k])    
     '''
 
+"""用于将transformer部分的参数替换成经过预训练的参数"""
 def read_checkpoint():
-    test_checkpoint_path = '/home/szy/detr/test_checkpoint.pth'
-    test_checkpoint = torch.load(test_checkpoint_path, map_location='cpu')
-    checkpoint_path = '/home/szy/detr/results_pretrain_complete/checkpoint0299.pth'
-    checkpoint = torch.load(checkpoint_path, map_location='cpu')
+    trans_checkpoint_path = '/home/szy/detr/checkpoints/detr-r50-e632da11.pth'
+    trans_checkpoint = torch.load(trans_checkpoint_path, map_location='cpu')
+    base_checkpoint_path = '/home/szy/detr/results_pretrain_state_overall_1/checkpoint.pth'
+    base_checkpoint = torch.load(base_checkpoint_path, map_location='cpu')
 
-    print(test_checkpoint.keys())
-    print(test_checkpoint['model'].keys())
-    test_model = test_checkpoint['model']
-    model = checkpoint['model']
-    for key in test_model.keys():
-        if 'intru' in key:
+    print(trans_checkpoint.keys())
+    print(trans_checkpoint['model'].keys())
+    trans_model = trans_checkpoint['model']
+    base_model = base_checkpoint['model']
+    for key in trans_model.keys():
+        if 'transformer' in key or 'backbone' in key:
             print(key)
-            model.update({key: test_model[key]})
+            base_model.update({key: trans_model[key]})
 
     print('\n')
-    print(model.keys())
+    print(base_model.keys())
 
     M = build_new_model()
-    M.load_state_dict(model)
-    path = '/home/szy/detr/intru_checkpoint.pth'
+    M.load_state_dict(base_model)
+    path = '/home/szy/detr/base_checkpoint_1.pth'
     torch.save({'model': M.state_dict()}, path)
 
 
@@ -148,7 +149,7 @@ def plot(data_dict):
 
 if __name__ == '__main__':
     #main()
-    #read_checkpoint()
+    read_checkpoint()
     #build_new_model()
     #read_log()
-    read_eval()
+    #read_eval()
