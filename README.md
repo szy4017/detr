@@ -2,6 +2,7 @@
 ========
 PyTorch training code and pretrained models for **DETR** (**DE**tection **TR**ansformer).
 We replace the full complex hand-crafted object detection pipeline with a Transformer, and match Faster R-CNN with a ResNet-50, obtaining **42 AP** on COCO using half the computation power (FLOPs) and the same number of parameters. Inference in 50 lines of PyTorch.
+
 Tips: label information.
 ```
 "categories": [
@@ -33,6 +34,30 @@ Tips: label information.
 ```
 
 ![DETR](.github/DETR.png)
+
+# 对于DETR的关键部件的介绍
+1. **CNN Backbone**：
+    * backbone的深度：深度越深，特征提取能力就越强；
+    * 输出特征图的size：size越大，transformer的输入序列就越长，长序列输入也会提升检测性能。
+
+2. **Transformer Encoder**：
+    * attention layer的层数：层数越多（相当于网络深度越深），提取全局特征的能力就强，导致最终的检测性能也越强；
+    * attention head的个数：个数越多（相当于特征通道数越多），也有助于全局特征的提取；
+    * positional encoding：位置编码的方式，这里采用固定（fixed）编码形式，具体消融实验结构见下表；
+    * 位置编码加入的位置：一般位置编码加入的位置有两种，input layer和atten layer，这里采用atten layer效果更好。
+
+3. **Transformer Decoder**：
+    * attention layer的层数：decoder attention主要关注于全局特征的局部信息，层数越深可以抑制对象的重复预测，深层的decoder可以达到比NMS方法更好的效果；
+    * attention head的个数：个数越多，有助于性能提升；
+    * positional encoding：位置编码方式，这里采用可学习（learnable）的编码形式，命名为object query，需要具体了解一下是怎么实现的；
+    * 位置编码加入的位置：一般位置编码加入的位置有两种，input layer和atten layer，这里采用atten layer效果更好；
+    * auxiliary decoding losses：辅助解码损失函数，在训练过程中，对每一层decoding输出都接一个FFN得到box的预测进行辅助损失的计算，有助于模型的训练。 
+    
+4. **Prediction FFN**：
+    * 预测box的形式：直接预测box，得到box中心点坐标，长宽尺寸和类别预测概率；
+    * FFN预测结构：用一个多层感知机来预测box的位置信息，用一个线性变化层来预测box的类别信息。
+
+![Positional Encoding](.github/positional_encoding.PNG)
 
 **What it is**. Unlike traditional computer vision techniques, DETR approaches object detection as a direct set prediction problem. It consists of a set-based global loss, which forces unique predictions via bipartite matching, and a Transformer encoder-decoder architecture. 
 Given a fixed small set of learned object queries, DETR reasons about the relations of the objects and the global image context to directly output the final set of predictions in parallel. Due to this parallel nature, DETR is very fast and efficient.
