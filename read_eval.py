@@ -25,9 +25,11 @@ def main():
 
 """用于将transformer部分的参数替换成经过预训练的参数"""
 def read_checkpoint():
-    trans_checkpoint_path = '/home/szy/detr/checkpoints/detr-r50-e632da11.pth'
+    #trans_checkpoint_path = '/home/szy/detr/checkpoints/detr-r50-e632da11.pth'
+    trans_checkpoint_path = '/home/szy/detr/results_pretrain_state_finetune/checkpoint0299.pth'
     trans_checkpoint = torch.load(trans_checkpoint_path, map_location='cpu')
-    base_checkpoint_path = '/home/szy/detr/results_pretrain_state_overall_1/checkpoint.pth'
+    base_checkpoint_path = '/home/szy/detr/results_pretrain_state_finetune_3/checkpoint.pth'
+    #base_checkpoint_path = '/home/szy/detr/base_checkpoint_3.pth'
     base_checkpoint = torch.load(base_checkpoint_path, map_location='cpu')
 
     print(trans_checkpoint.keys())
@@ -44,7 +46,7 @@ def read_checkpoint():
 
     M = build_new_model()
     M.load_state_dict(base_model)
-    path = '/home/szy/detr/base_checkpoint_1.pth'
+    path = '/home/szy/detr/base_checkpoint_5.pth'
     torch.save({'model': M.state_dict()}, path)
 
 

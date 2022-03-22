@@ -263,24 +263,25 @@ if __name__ == '__main__':
     #args.resume = '/home/szy/detr/checkpoints/detr-r50-e632da11.pth'
     #args.resume = '/home/szy/detr/results/checkpoint0299.pth'
     #args.resume = '/home/szy/detr/results_pretrain_complete/checkpoint0199.pth'
-    args.resume = '/home/szy/detr/results_pretrain_state_finetune/checkpoint0199.pth'
+    args.resume = '/home/szy/detr/results_pretrain_state_finetune/checkpoint0299.pth'
     #args.dataset_file = 'coco'
     args.dataset_file = 'intruscapes'
     #args.coco_path = '/home/szy/data/coco'
     args.coco_path = '/home/szy/data/intruscapes'
-    main(args)
+    main(args)    
     '''
 
     # for training
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
-    args.output_dir = './results_pretrain_state_finetune_1'
+    args.output_dir = './results_pretrain_state_finetune_3'
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     args.batch_size = 4
     args.no_aux_loss = True
     #args.resume = '/home/szy/detr/checkpoints/detr-r50-e632da11.pth'
-    args.resume = '/home/szy/detr/base_checkpoint_1.pth'
+    args.resume = '/home/szy/detr/base_checkpoint_5.pth'
+    #args.resume = '/home/szy/detr/results_pretrain_state_finetune/checkpoint0099.pth'
     args.dataset_file = 'intruscapes'
     args.coco_path = '/home/szy/data/intruscapes'
     main(args)
