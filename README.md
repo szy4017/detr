@@ -57,6 +57,15 @@ Tips: label information.
     * 预测box的形式：直接预测box，得到box中心点坐标，长宽尺寸和类别预测概率；
     * FFN预测结构：用一个多层感知机来预测box的位置信息，用一个线性变化层来预测box的类别信息。
 
+## 模型训练遇到的问题
+目前唯一的可以训练成功的模式是，完全不改变原有分类器，增加一个state分类器，将预训练的backbone和transformer参数
+替换到现有模型中，然后进行训练。可以采用只训练分类器的模式，也可以采用整体finetune的模式，实验效果中整体finetune
+的效果会更好一些。
+其他训练方法存在的问题：
+1. 不载入预训练参数，直接训练，训练结果可能会发散，无法训练成功；
+2. 载入预训练参数，不改变class分类器结构，改变输出类别数（91->2）,训练能收敛，但最终训练效果较差；
+3. 载入预训练参数，改变class分类器结构，测试中；
+
 ![Positional Encoding](.github/positional_encoding.PNG)
 
 **What it is**. Unlike traditional computer vision techniques, DETR approaches object detection as a direct set prediction problem. It consists of a set-based global loss, which forces unique predictions via bipartite matching, and a Transformer encoder-decoder architecture. 
