@@ -179,7 +179,10 @@ def main(args):
                 args.resume, map_location='cpu', check_hash=True)
         else:   # 从本地路径中加载checkpoint
             checkpoint = torch.load(args.resume, map_location='cpu')
-        model_without_ddp.load_state_dict(checkpoint['model'])  # 加载checkpint中的model
+            model_dict = model_without_ddp.state_dict()
+            state_dict = {k: v for k, v in checkpoint['model'].items() if k in model_dict.keys()}
+            model_dict.update(state_dict)
+        model_without_ddp.load_state_dict(model_dict)  # 加载checkpint中的model
         print('load weight from ', args.resume)
         if not args.eval and 'optimizer' in checkpoint and 'lr_scheduler' in checkpoint and 'epoch' in checkpoint:
             optimizer.load_state_dict(checkpoint['optimizer'])
@@ -274,13 +277,13 @@ if __name__ == '__main__':
     # for training
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
-    args.output_dir = './results_pretrain_state_finetune_1_1'
+    args.output_dir = './results_pretrain_state_finetune_1'
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     args.batch_size = 4
     args.aux_loss = False
-    #args.resume = '/home/szy/detr/checkpoints/detr-r50-e632da11.pth'
-    args.resume = '/home/szy/detr/base_checkpoint_1.pth'
+    args.resume = '/home/szy/detr/checkpoints/detr-r50-e632da11.pth'
+    #args.resume = '/home/szy/detr/base_checkpoint_1_1.pth'
     #args.resume = '/home/szy/detr/results_pretrain_state_finetune/checkpoint0099.pth'
     args.dataset_file = 'intruscapes'
     args.coco_path = '/home/szy/data/intruscapes'

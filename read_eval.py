@@ -39,17 +39,26 @@ def read_checkpoint():
     print(trans_checkpoint['model'].keys())
     trans_model = trans_checkpoint['model']
     base_model = base_checkpoint['model']
+    '''
     for key in trans_model.keys():
         if 'transformer' in key or 'backbone' in key:
             print(key)
-            base_model.update({key: trans_model[key]})
+            base_model.update({key: trans_model[key]})    
+    '''
+
+    for key in base_model.keys():
+        if 'intru_state' in key or 'class' in key:
+            print(key)
+            trans_model.update({key: base_model[key]})
 
     print('\n')
-    print(base_model.keys())
+    #print(base_model.keys())
+    print(trans_model.keys())
 
     M = build_new_model()
-    M.load_state_dict(base_model)
-    path = '/home/szy/detr/base_checkpoint_1.pth'
+    #M.load_state_dict(base_model)
+    M.load_state_dict(trans_model)
+    path = '/home/szy/detr/base_checkpoint_1_1.pth'
     torch.save({'model': M.state_dict()}, path)
 
 
