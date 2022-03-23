@@ -251,7 +251,7 @@ def main(args):
 
 if __name__ == '__main__':
     import os
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
     # for evaluation
     '''
@@ -277,11 +277,11 @@ if __name__ == '__main__':
     # for training
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
-    args.output_dir = './results_pretrain_state_finetune_1'
+    args.output_dir = './results_pretrain_state_finetune_2'
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     args.batch_size = 4
-    args.aux_loss = False
+    args.aux_loss = True
     args.resume = '/home/szy/detr/checkpoints/detr-r50-e632da11.pth'
     #args.resume = '/home/szy/detr/base_checkpoint_1_1.pth'
     #args.resume = '/home/szy/detr/results_pretrain_state_finetune/checkpoint0099.pth'
