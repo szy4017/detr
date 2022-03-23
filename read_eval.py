@@ -23,12 +23,15 @@ def main():
         print(k, model[k])    
     '''
 
-"""用于将transformer部分的参数替换成经过预训练的参数"""
 def read_checkpoint():
-    #trans_checkpoint_path = '/home/szy/detr/checkpoints/detr-r50-e632da11.pth'
-    trans_checkpoint_path = '/home/szy/detr/results_pretrain_state_finetune/checkpoint0299.pth'
+    """
+    用于将transformer部分的参数替换成经过预训练的参数
+    """
+
+    trans_checkpoint_path = '/home/szy/detr/checkpoints/detr-r50-e632da11.pth'
+    #trans_checkpoint_path = '/home/szy/detr/results_pretrain_state_finetune/checkpoint0299.pth'
     trans_checkpoint = torch.load(trans_checkpoint_path, map_location='cpu')
-    base_checkpoint_path = '/home/szy/detr/results_pretrain_state_finetune_3/checkpoint.pth'
+    base_checkpoint_path = '/home/szy/detr/results_pretrain_state_finetune_1/checkpoint.pth'
     #base_checkpoint_path = '/home/szy/detr/base_checkpoint_3.pth'
     base_checkpoint = torch.load(base_checkpoint_path, map_location='cpu')
 
@@ -46,9 +49,27 @@ def read_checkpoint():
 
     M = build_new_model()
     M.load_state_dict(base_model)
-    path = '/home/szy/detr/base_checkpoint_5.pth'
+    path = '/home/szy/detr/base_checkpoint_1.pth'
     torch.save({'model': M.state_dict()}, path)
 
+
+def watch_checkpoint_classification():
+    """
+    查看checkpoint模型分类器结构
+    """
+
+    checkpoint_path = '/home/szy/detr/base_checkpoint_3.pth'
+    checkpoint = torch.load(checkpoint_path, map_location='cpu')
+    model = checkpoint['model']
+
+    print(checkpoint_path)
+    for key in model.keys():
+        if 'transformer' in key or 'backbone' in key:
+            continue
+        else:
+            print(key)
+            if 'class' in key:
+                print(model[key].shape)
 
 def read_eval():
     eval_path = '/home/szy/detr/results_pretrain_state_finetune/eval/latest.pth'
@@ -152,6 +173,7 @@ def plot(data_dict):
 if __name__ == '__main__':
     #main()
     read_checkpoint()
+    #watch_checkpoint_classification()
     #build_new_model()
     #read_log()
     #read_eval()
