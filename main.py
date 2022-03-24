@@ -173,16 +173,16 @@ def main(args):
         model_without_ddp.detr.load_state_dict(checkpoint['model'])
 
     output_dir = Path(args.output_dir)
-    if args.resume: # 从checkpoint中加载参数，checkpoint里面的参数是全，要只加载backbone和transfomer部分的参数
-        if args.resume.startswith('https'): # 从网络地址中下载并加载checkpoint
+    if args.resume: ## 从checkpoint中加载参数，checkpoint里面的参数是全，要只加载backbone和transfomer部分的参数
+        if args.resume.startswith('https'): ## 从网络地址中下载并加载checkpoint
             checkpoint = torch.hub.load_state_dict_from_url(
                 args.resume, map_location='cpu', check_hash=True)
         else:   # 从本地路径中加载checkpoint
             checkpoint = torch.load(args.resume, map_location='cpu')
             model_dict = model_without_ddp.state_dict()
             state_dict = {k: v for k, v in checkpoint['model'].items() if k in model_dict.keys()}
-            model_dict.update(state_dict)
-        model_without_ddp.load_state_dict(model_dict)  # 加载checkpint中的model
+            model_dict.update(state_dict)   ## 更新与checkpoint中相应key的参数
+        model_without_ddp.load_state_dict(model_dict)  ## 加载checkpint中的model
         print('load weight from ', args.resume)
         if not args.eval and 'optimizer' in checkpoint and 'lr_scheduler' in checkpoint and 'epoch' in checkpoint:
             optimizer.load_state_dict(checkpoint['optimizer'])
@@ -251,10 +251,10 @@ def main(args):
 
 if __name__ == '__main__':
     import os
-    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
     # for evaluation
-    '''
+    #'''
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
     args.output_dir = './results'
@@ -266,25 +266,27 @@ if __name__ == '__main__':
     #args.resume = '/home/szy/detr/checkpoints/detr-r50-e632da11.pth'
     #args.resume = '/home/szy/detr/results/checkpoint0299.pth'
     #args.resume = '/home/szy/detr/results_pretrain_complete/checkpoint0199.pth'
-    args.resume = '/home/szy/detr/results_pretrain_state_finetune/checkpoint0299.pth'
+    args.resume = '/home/szy/detr/results_pretrain_state_feature_3/checkpoint.pth'
     #args.dataset_file = 'coco'
     args.dataset_file = 'intruscapes'
     #args.coco_path = '/home/szy/data/coco'
     args.coco_path = '/home/szy/data/intruscapes'
     main(args)    
-    '''
+    #'''
 
     # for training
+    '''
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
-    args.output_dir = './results_pretrain_state_finetune_2'
+    args.output_dir = './results_pretrain_state_feature_3'
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     args.batch_size = 4
-    args.aux_loss = True
+    args.aux_loss = False
     args.resume = '/home/szy/detr/checkpoints/detr-r50-e632da11.pth'
     #args.resume = '/home/szy/detr/base_checkpoint_1_1.pth'
     #args.resume = '/home/szy/detr/results_pretrain_state_finetune/checkpoint0099.pth'
     args.dataset_file = 'intruscapes'
     args.coco_path = '/home/szy/data/intruscapes'
     main(args)
+    '''

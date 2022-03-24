@@ -63,7 +63,7 @@ class DETR(nn.Module):
                - "aux_outputs": Optional, only returned when auxilary losses are activated. It is a list of
                                 dictionnaries containing the two above keys for each decoder layer.
         """
-
+        '''
         if isinstance(samples, (list, torch.Tensor)):
             samples = nested_tensor_from_tensor_list(samples)
         features, pos = self.backbone(samples)
@@ -72,11 +72,10 @@ class DETR(nn.Module):
         assert mask is not None
         hs = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[0]
         # hs[6, 2, 100, 256]->[decoder_layer, batch_size, query_num, feature_vector]        
-
+        '''
 
 
         # 不计算backbone和transformer部分的梯度，只训练分类器
-        '''
         with torch.no_grad():
             if isinstance(samples, (list, torch.Tensor)):
                 samples = nested_tensor_from_tensor_list(samples)
@@ -85,8 +84,7 @@ class DETR(nn.Module):
             src, mask = features[-1].decompose()
             assert mask is not None
             # hs是transformer后提取出来的特征，shape为[6, 2, 100, 256]，分别表示decoder层数，batch大小，设定的目标数，特征向量维度
-            hs = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[0]        
-        '''
+            hs = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[0]
 
 
         feature_class, outputs_class = self.class_embed(hs)
@@ -408,7 +406,7 @@ def build(args):
     if args.dataset_file == 'coco':
         num_classes = 91
     elif args.dataset_file == 'intruscapes':
-        num_classes = 91
+        num_classes = 2
     else:
         num_classes = 20
     #num_classes = 20 if args.dataset_file != 'coco' else 91
