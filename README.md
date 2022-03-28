@@ -65,6 +65,18 @@ Tips: label information.
 1. 不载入预训练参数，直接训练，训练结果可能会发散，无法训练成功；
 2. 载入预训练参数，不改变class分类器结构，改变输出类别数（91->2）,训练能收敛，但最终训练效果较差；
 3. 载入预训练参数，改变class分类器结构，测试中；
+找到问题原有：
+出现训练不成功的主要原因在于初始参数加载的问题。由于加载的是预训练模型的参数，一开始采用的在state_dict中选取`backbone`和
+`transformer`字段进行load，这样load参数可能会有一部分字段没有load进来，导致训练不成功。现在采用state_dict和model_dict
+字段匹配的方法进行load，只要两个dict里面的有相同的字段，并且字段对应的参数shape相同就load进来，这样训练是可行的。
+
+## detr改进点分析
+**20220325与郭树璇老师交流**
+1. 分析state预测与哪些特征信息有关，与框内信息相关还是能更具框外信息进行state的预测；
+2. 整理了transformer encoder decoder的结构功能，encoder主要用于提取特征，decoder主要用于抓取object相关特征。由此，可以尝试在decoder
+中再设置一组state query来抓取与state相关的特征；
+3. 调研其他detr相关工作的改进方法；
+4. 调研transfomer模型应用于小数据集的方法。
 
 ![Positional Encoding](.github/positional_encoding.PNG)
 
