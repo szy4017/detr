@@ -289,12 +289,14 @@ if __name__ == '__main__':
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     args.batch_size = 4
     args.aux_loss = True
-    args.resume = '/home/szy/detr/checkpoints/detr-r50-e632da11.pth'
+    #args.resume = '/home/szy/detr/checkpoints/detr-r50-e632da11.pth'
     #args.resume = '/home/szy/detr/base_checkpoint_1_1.pth'
     #args.resume = '/home/szy/detr/results_pretrain_state_finetune/checkpoint0099.pth'
     args.dataset_file = 'intruscapes'
     args.coco_path = '/home/szy/data/intruscapes'
     args.num_queries = 50
     args.train_mode = 'finetune'
+    args.epochs = 400
+    args.start_epoch = 300
     main(args)
     #'''
