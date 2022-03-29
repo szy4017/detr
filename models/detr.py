@@ -21,7 +21,7 @@ from .transformer import build_transformer
 
 class DETR(nn.Module):
     """ This is the DETR module that performs object detection """
-    def __init__(self, backbone, transformer, num_classes, num_queries, train_mode, aux_loss=False):
+    def __init__(self, backbone, transformer, num_classes, num_queries, train_mode, aux_loss=False, sta_query=False, ffn_model='old'):
         """ Initializes the model.
         Parameters:
             backbone: torch module of the backbone to be used. See backbone.py
@@ -35,16 +35,21 @@ class DETR(nn.Module):
         self.num_queries = num_queries
         self.transformer = transformer
         hidden_dim = transformer.d_model
-        #self.class_embed = nn.Linear(hidden_dim, num_classes + 1)   ## 类别分类器
-        self.class_embed = mlp_cls(output_dim=num_classes+1)   # new FFN for class embedding
-        #self.intru_state_embed = nn.Linear(hidden_dim, 3)  ## 入侵状态分类器，一共有intru，non-intru，None三个类别
-        self.intru_state_embed = mlp_sta()     # new FFN for state embedding
+        self.ffn_model = ffn_model
+        assert self.ffn_model in ['old', 'new']
+        if self.ffn_model == 'old':
+            self.class_embed = nn.Linear(hidden_dim, num_classes + 1)  ## 类别分类器
+            self.intru_state_embed = nn.Linear(hidden_dim, 3)  ## 入侵状态分类器，一共有intru，non-intru，None三个类别
+        elif self.ffn_model == 'new':
+            self.class_embed = mlp_cls(output_dim=num_classes + 1)  # new FFN for class embedding
+            self.intru_state_embed = mlp_sta()  # new FFN for state embedding
         self.bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3) ## 位置分类器
         self.query_embed = nn.Embedding(num_queries, hidden_dim)
         self.input_proj = nn.Conv2d(backbone.num_channels, hidden_dim, kernel_size=1)
         self.backbone = backbone
         self.train_mode = train_mode
         self.aux_loss = aux_loss
+        self.sta_query = sta_query
 
     def forward(self, samples: NestedTensor):
         """ The forward expects a NestedTensor, which consists of:
@@ -69,12 +74,16 @@ class DETR(nn.Module):
             # finetune
             if isinstance(samples, (list, torch.Tensor)):
                 samples = nested_tensor_from_tensor_list(samples)
-            features, pos = self.backbone(samples)
+            features, pos = self.backbone(samples)  ## backbone是怎么得到pos位置编码和mask信息的？
 
             src, mask = features[-1].decompose()
-            assert mask is not None
-            hs = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[0]
-            # hs[6, 2, 100, 256]->[decoder_layer, batch_size, query_num, feature_vector]
+            assert mask is not None ## 这里的mask是针对encoder的
+            if self.sta_query:
+                hs_tgt = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[0]
+                hs_sta = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[1]
+            else:
+                hs = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[0]
+                # hs[6, 2, 100, 256]->[decoder_layer, batch_size, query_num, feature_vector]
         elif self.train_mode == 'feature_base':
             # feature based
             ## 不计算backbone和transformer部分的梯度，只训练分类器
@@ -88,16 +97,26 @@ class DETR(nn.Module):
                 # hs是transformer后提取出来的特征，shape为[6, 2, 100, 256]，分别表示decoder层数，batch大小，设定的目标数，特征向量维度
                 hs = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[0]
 
+        if self.sta_query:
+            if self.ffn_model == 'old':
+                outputs_class = self.class_embed(hs_tgt)    # hs[6, 2, 100, 256]->outputs_class[6, 2, 100, 92]，分类目标的类别
+                outputs_intru_state = self.intru_state_embed(hs_sta)    # hs[6, 2, 100, 256]->outputs_class[6, 2, 100, 3]，分类目标的入侵状态
+                hs = hs_tgt
+            elif self.ffn_model == 'new':
+                feature_class, outputs_class = self.class_embed(hs_tgt)
+                outputs_intru_state = self.intru_state_embed(hs_sta, feature_class)
+                hs = hs_tgt
+        else:
+            if self.ffn_model == 'old':
+                outputs_class = self.class_embed(hs)
+                outputs_intru_state = self.intru_state_embed(hs)
+            elif self.ffn_model == 'new':
+                feature_class, outputs_class = self.class_embed(hs)
+                outputs_intru_state = self.intru_state_embed(hs, feature_class)
 
-        feature_class, outputs_class = self.class_embed(hs)
-        #outputs_class = self.class_embed(hs) # hs[6, 2, 100, 256]->outputs_class[6, 2, 100, 92]，分类目标的类别
-        outputs_intru_state = self.intru_state_embed(hs, feature_class)
-        #outputs_intru_state= self.intru_state_embed(hs) # hs[6, 2, 100, 256]->outputs_class[6, 2, 100, 3]，分类目标的入侵状态
         outputs_coord = self.bbox_embed(hs).sigmoid() # hs[6, 2, 100, 256]->outputs_coord[6, 2, 100, 4]，分类目标的位置
         #out = {'pred_logits': outputs_class[-1], 'pred_boxes': outputs_coord[-1]}   # 最后选择transformer decoder最后一层的结果作为输出
         out = {'pred_logits': outputs_class[-1], 'pred_boxes': outputs_coord[-1], 'pred_states': outputs_intru_state[-1]}
-        #print('classes: ', outputs_class[-1, 0, :, :])
-        #print('intru: ', outputs_intru_state[-1, 0, :, :])
 
         if self.aux_loss:
             out['aux_outputs'] = self._set_aux_loss(outputs_class, outputs_coord, outputs_intru_state)   # 输出所有decoder层的结果，用于辅助分类器的损失计算
@@ -429,6 +448,8 @@ def build(args):
         num_queries=args.num_queries,
         train_mode=args.train_mode,
         aux_loss=args.aux_loss,
+        sta_query=args.sta_query,
+        ffn_model=args.ffn_model,
     )
     if args.masks:
         model = DETRsegm(model, freeze_detr=(args.frozen_weights is not None))

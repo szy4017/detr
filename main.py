@@ -55,6 +55,12 @@ def get_args_parser():
     parser.add_argument('--num_queries', default=100, type=int,
                         help="Number of query slots")
     parser.add_argument('--pre_norm', action='store_true')
+    # set state query in transformer decoder
+    parser.add_argument('--sta_query', action='store_true',
+                        help="Add state query in transformer decoder")
+    # set FFN model
+    parser.add_argument('--ffn_model', default='old', type=str,
+                        help="Model of prediction FFN")
 
     # * Segmentation
     parser.add_argument('--masks', action='store_true',
@@ -64,14 +70,14 @@ def get_args_parser():
     parser.add_argument('--no_aux_loss', dest='aux_loss', action='store_false',
                         help="Disables auxiliary decoding losses (loss at each layer)")
     # * Matcher
-    # 设置各个损失函数的权重系数
+    ## 设置各个损失函数的权重系数
     parser.add_argument('--set_cost_class', default=1, type=float,
                         help="Class coefficient in the matching cost")
     parser.add_argument('--set_cost_bbox', default=5, type=float,
                         help="L1 box coefficient in the matching cost")
     parser.add_argument('--set_cost_giou', default=2, type=float,
                         help="giou box coefficient in the matching cost")
-    # 添加入侵状态损失的权重系数
+    ## 添加入侵状态损失的权重系数
     parser.add_argument('--set_cost_state', default=1, type=float,
                         help="State coefficient in the matching cost")
     # * Loss coefficients
@@ -284,12 +290,12 @@ if __name__ == '__main__':
     #'''
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
-    args.output_dir = './results_pretrain_state_finetune_4'
+    args.output_dir = './results_pretrain_state_finetune_5'
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-    args.batch_size = 4
+    args.batch_size = 2
     args.aux_loss = True
-    #args.resume = '/home/szy/detr/checkpoints/detr-r50-e632da11.pth'
+    args.resume = '/home/szy/detr/checkpoints/detr-r50-e632da11.pth'
     #args.resume = '/home/szy/detr/base_checkpoint_1_1.pth'
     #args.resume = '/home/szy/detr/results_pretrain_state_finetune/checkpoint0099.pth'
     args.dataset_file = 'intruscapes'
@@ -297,6 +303,6 @@ if __name__ == '__main__':
     args.num_queries = 50
     args.train_mode = 'finetune'
     args.epochs = 400
-    args.start_epoch = 300
+    args.sta_query = True
     main(args)
     #'''
