@@ -39,7 +39,8 @@ class DETR(nn.Module):
         assert self.ffn_model in ['old', 'new']
         if self.ffn_model == 'old':
             self.class_embed = nn.Linear(hidden_dim, num_classes + 1)  ## 类别分类器
-            self.intru_state_embed = nn.Linear(hidden_dim, 3)  ## 入侵状态分类器，一共有intru，non-intru，None三个类别
+            # self.intru_state_embed = nn.Linear(hidden_dim, 3)  ## 入侵状态分类器，一共有intru，non-intru，None三个类别 # for finetune_5
+            self.intru_state_embed = nn.Linear(hidden_dim*2, 3) # for finetune_6
         elif self.ffn_model == 'new':
             self.class_embed = mlp_cls(output_dim=num_classes + 1)  # new FFN for class embedding
             self.intru_state_embed = mlp_sta()  # new FFN for state embedding
@@ -100,7 +101,8 @@ class DETR(nn.Module):
         if self.sta_query:
             if self.ffn_model == 'old':
                 outputs_class = self.class_embed(hs_tgt)    # hs[6, 2, 100, 256]->outputs_class[6, 2, 100, 92]，分类目标的类别
-                outputs_intru_state = self.intru_state_embed(hs_sta)    # hs[6, 2, 100, 256]->outputs_class[6, 2, 100, 3]，分类目标的入侵状态
+                # outputs_intru_state = self.intru_state_embed(hs_sta)    # hs[6, 2, 100, 256]->outputs_class[6, 2, 100, 3]，分类目标的入侵状态   # for finetune_5
+                outputs_intru_state = self.intru_state_embed(torch.cat((hs_tgt, hs_sta), -1))
                 hs = hs_tgt
             elif self.ffn_model == 'new':
                 feature_class, outputs_class = self.class_embed(hs_tgt)
