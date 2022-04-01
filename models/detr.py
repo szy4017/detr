@@ -39,8 +39,8 @@ class DETR(nn.Module):
         assert self.ffn_model in ['old', 'new']
         if self.ffn_model == 'old':
             self.class_embed = nn.Linear(hidden_dim, num_classes + 1)  ## 类别分类器
-            # self.intru_state_embed = nn.Linear(hidden_dim, 3)  ## 入侵状态分类器，一共有intru，non-intru，None三个类别 # for finetune_5
-            self.intru_state_embed = nn.Linear(hidden_dim*2, 3) # for finetune_6
+            self.intru_state_embed = nn.Linear(hidden_dim, 3)  ## 入侵状态分类器，一共有intru，non-intru，None三个类别 # for finetune_5
+            # self.intru_state_embed = nn.Linear(hidden_dim*2, 3) # for finetune_6
         elif self.ffn_model == 'new':
             self.class_embed = mlp_cls(output_dim=num_classes + 1)  # new FFN for class embedding
             self.intru_state_embed = mlp_sta()  # new FFN for state embedding
@@ -155,7 +155,8 @@ class SetCriterion(nn.Module):
         self.eos_coef = eos_coef
         self.losses = losses
         empty_weight = torch.ones(self.num_classes + 1)
-        state_empty_weight = torch.ones(3)
+        # state_empty_weight = torch.ones(3)
+        state_empty_weight = torch.tensor([10.0, 1.0, 100.0])   ## 为避免类别不均衡，在cross entropy loss中增强类别权重：[None: 10.0, Non intrusion: 1.0, Intrusion: 100.0]
         empty_weight[-1] = self.eos_coef
         self.register_buffer('empty_weight', empty_weight)  # 设置模型中的参数不更新，并且参数能够保存下来，通过register_buffer登记过的张量：会自动成为模型中的参数，随着模型移动（gpu/cpu）而移动，但是不会随着梯度进行更新。
         self.register_buffer('state_empty_weight', state_empty_weight)
@@ -456,8 +457,12 @@ def build(args):
     if args.masks:
         model = DETRsegm(model, freeze_detr=(args.frozen_weights is not None))
     matcher = build_matcher(args)
-    weight_dict = {'loss_ce': 1, 'loss_bbox': args.bbox_loss_coef}
-    weight_dict['loss_giou'] = args.giou_loss_coef
+    weight_dict = {
+        'loss_ce': args.class_loss_coef,
+        'loss_se': args.state_loss_coef,
+        'loss_bbox': args.bbox_loss_coef,
+        'loss_giou': args.giou_loss_coef,
+    }
     if args.masks:
         weight_dict["loss_mask"] = args.mask_loss_coef
         weight_dict["loss_dice"] = args.dice_loss_coef

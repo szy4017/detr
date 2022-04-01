@@ -81,6 +81,8 @@ def get_args_parser():
     parser.add_argument('--set_cost_state', default=1, type=float,
                         help="State coefficient in the matching cost")
     # * Loss coefficients
+    parser.add_argument('--class_loss_coef', default=1, type=float)
+    parser.add_argument('--state_loss_coef', default=1, type=float)
     parser.add_argument('--mask_loss_coef', default=1, type=float)
     parser.add_argument('--dice_loss_coef', default=1, type=float)
     parser.add_argument('--bbox_loss_coef', default=5, type=float)
@@ -278,20 +280,23 @@ if __name__ == '__main__':
     #args.resume = '/home/szy/detr/checkpoints/detr-r50-e632da11.pth'
     #args.resume = '/home/szy/detr/results/checkpoint0299.pth'
     #args.resume = '/home/szy/detr/results_pretrain_complete/checkpoint0199.pth'
-    args.resume = '/home/szy/detr/results_pretrain_state_finetune_5/checkpoint.pth'
+    args.resume = '/home/szy/detr/results_pretrain_state_finetune/checkpoint.pth'
     #args.dataset_file = 'coco'
     args.dataset_file = 'intruscapes'
     #args.coco_path = '/home/szy/data/coco'
     args.coco_path = '/home/szy/data/intruscapes'
-    args.sta_query = True
+    args.sta_query = False
+    args.num_queries = 100
+    args.train_mode = 'finetune'
     main(args)    
     '''
 
     # for training
-    #'''
+    # '''
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
-    args.output_dir = './results_pretrain_state_finetune_6'
+    # args.output_dir = './results_pretrain_state_test'
+    args.output_dir = './results_pretrain_state_finetune_7'
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     args.batch_size = 2
@@ -304,6 +309,6 @@ if __name__ == '__main__':
     args.num_queries = 50
     args.train_mode = 'finetune'
     args.epochs = 400
-    args.sta_query = True
+    args.sta_query = False
     main(args)
-    #'''
+    # '''

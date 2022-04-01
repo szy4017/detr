@@ -22,6 +22,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     metric_logger.add_meter('class_error', utils.SmoothedValue(window_size=1, fmt='{value:.2f}'))
+    metric_logger.add_meter('state_error', utils.SmoothedValue(window_size=1, fmt='{value:.2f}'))
     header = 'Epoch: [{}]'.format(epoch)
     print_freq = 10
 
@@ -31,7 +32,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
         outputs = model(samples)
         loss_dict = criterion(outputs, targets)
-        weight_dict = criterion.weight_dict
+        weight_dict = criterion.weight_dict ## weight是每个loss在计算total loss的权重系数
         losses = sum(loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if k in weight_dict)
 
         # reduce losses over all GPUs for logging purposes
@@ -40,12 +41,22 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                                       for k, v in loss_dict_reduced.items()}
         loss_dict_reduced_scaled = {k: v * weight_dict[k]
                                     for k, v in loss_dict_reduced.items() if k in weight_dict}
+        losses_class_dict_scaled = {k: v
+                               for k, v in loss_dict_reduced_scaled.items() if 'ce' in k}
+        losses_state_dict_scaled = {k: v
+                               for k, v in loss_dict_reduced_scaled.items() if 'se' in k}
         losses_reduced_scaled = sum(loss_dict_reduced_scaled.values())
+        losses_class_scaled = sum(losses_class_dict_scaled.values())
+        losses_state_scaled = sum(losses_state_dict_scaled.values())
 
-        loss_value = losses_reduced_scaled.item()
+        loss_value = losses_reduced_scaled.item()   # total loss
+        loss_class_value = losses_class_scaled.item()   # class loss
+        loss_state_value = losses_state_scaled.item()   # state loss
 
         if not math.isfinite(loss_value):
             print("Loss is {}, stopping training".format(loss_value))
+            print("Class loss is {}, stopping training".format(loss_class_value))
+            print("State loss is {}, stopping training".format(loss_state_value))
             print(loss_dict_reduced)
             sys.exit(1)
 
@@ -56,8 +67,10 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         optimizer.step()
 
         # metric log记录，添加state的记录
-        metric_logger.update(loss=loss_value, **loss_dict_reduced_scaled, **loss_dict_reduced_unscaled)
+        metric_logger.update(loss=loss_value, class_loss=loss_class_value, state_loss=loss_state_value,
+                             **loss_dict_reduced_scaled, **loss_dict_reduced_unscaled)
         metric_logger.update(class_error=loss_dict_reduced['class_error'])
+        metric_logger.update(state_error=loss_dict_reduced['state_error'])
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()

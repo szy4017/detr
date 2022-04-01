@@ -22,30 +22,32 @@ from util.misc import all_gather
 
 
 class CocoEvaluator(object):
-    def __init__(self, coco_gt, iou_types):
+    def __init__(self, coco_gt, iou_types, score_threshold=0.5):
         assert isinstance(iou_types, (list, tuple))
         coco_gt = copy.deepcopy(coco_gt)
         self.coco_gt = coco_gt
 
         self.iou_types = iou_types
         self.coco_eval = {}
-        self.coco_eval_state = {}   # 存储eval state的相关信息
+        self.coco_eval_state = {}   ## 存储eval state的相关信息
         for iou_type in iou_types:
             self.coco_eval[iou_type] = COCOeval(coco_gt, iouType=iou_type)
             self.coco_eval_state[iou_type] = COCOeval(coco_gt, iouType=iou_type)
 
         self.img_ids = []
         self.eval_imgs = {k: [] for k in iou_types}
-        self.eval_imgs_state = {h: [] for h in iou_types}   # 存储eval state的相关信息
+        self.eval_imgs_state = {h: [] for h in iou_types}   ## 存储eval state的相关信息
+        self.score_threshold = score_threshold  ## 可视化预测结果的置信度阈值
+        self.save_file = True
 
-    # update将coco_dt存入coco_eval中，然后进行coco_eval.accumulate()和coco_eval.summarize()就可以得到评估结果了
+    ## update将coco_dt存入coco_eval中，然后进行coco_eval.accumulate()和coco_eval.summarize()就可以得到评估结果了
     def update(self, predictions):
         img_ids = list(np.unique(list(predictions.keys())))
         self.img_ids.extend(img_ids)
 
         for iou_type in self.iou_types:
-            results = self.prepare(predictions, iou_type)   # 得到COCO形式的results<dict>
-            #self.show_result(results)
+            results = self.prepare(predictions, iou_type)   ## 得到COCO形式的results<dict>
+            self.show_result(results)   # show the image results of class prediction and state prediction
 
             # suppress pycocotools prints
             with open(os.devnull, 'w') as devnull:
@@ -66,14 +68,18 @@ class CocoEvaluator(object):
 
     # 显示预测结果
     def show_result(self, results):
-        # 删去results中score比较低的对象
-        res_list = []
+        """
+        可视化预测结果，包括class prediction和state prediction
+
+        :params results: 预测结果
+        """
+        res_list = list()
         for res in results:
-            if res['score'] > 0.5:
+            if res['score'] > self.score_threshold:
                 res_list.append(res)
         results = res_list
-        #return results
 
+        # load prediction annotations
         coco = self.coco_gt
         cocoRes = coco.loadRes(results)
         catIds = cocoRes.getCatIds(catNms='pedestrian')
@@ -81,7 +87,11 @@ class CocoEvaluator(object):
         img_info = cocoRes.loadImgs(imgIds[np.random.randint(0, len(imgIds))])
         annIds = cocoRes.getAnnIds(imgIds=img_info[0]['id'])
         anns = cocoRes.loadAnns(annIds)
+        # load ground truth annotation
+        annIds_gt = coco.getAnnIds(imgIds=img_info[0]['id'])
+        anns_gt = coco.loadAnns(annIds_gt)
 
+        # load image
         root_path = '/home/szy/data/cityscape/leftImg8bit/val'
         file_name = img_info[0]['file_name']
         city_name = file_name.split('_')[0]
@@ -89,15 +99,33 @@ class CocoEvaluator(object):
         imgPath = os.path.join(imgPath, file_name)
         print(imgPath)
         img = cv.imread(imgPath)
+        img_rgb = bgr2rgb(img)
 
+        # plt
         plt.title('Class Prediction')
-        plt.imshow(bgr2rgb(img))
+        plt.imshow(img_rgb)
         cocoRes.showBBox(anns)
+        plt.savefig('./misc/cls_pred_{}.png'.format(img_info[0]['id']))
         plt.show()
         plt.title('State Prediction')
-        plt.imshow(bgr2rgb(img))
+        plt.imshow(img_rgb)
         cocoRes.showIntrusion(anns)
+        plt.savefig('./misc/sta_pred_{}.png'.format(img_info[0]['id']))
         plt.show()
+        plt.title('Class Ground Truth')
+        plt.imshow(img_rgb)
+        coco.showBBox(anns_gt)
+        plt.savefig('./misc/cls_gt_{}.png'.format(img_info[0]['id']))
+        plt.show()
+        plt.title('State Ground Truth')
+        plt.imshow(img_rgb)
+        coco.showIntrusion(anns_gt)
+        plt.savefig('./misc/sta_gt_{}.png'.format(img_info[0]['id']))
+        plt.show()
+
+        pass
+
+
 
     # 将所有self.eval_imgs的数据进行同步
     def synchronize_between_processes(self):
