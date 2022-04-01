@@ -21,7 +21,7 @@ from .transformer import build_transformer
 
 class DETR(nn.Module):
     """ This is the DETR module that performs object detection """
-    def __init__(self, backbone, transformer, num_classes, num_queries, train_mode, aux_loss=False, sta_query=False, ffn_model='old'):
+    def __init__(self, backbone, transformer, num_classes, num_states, num_queries, train_mode, aux_loss=False, sta_query=False, ffn_model='old'):
         """ Initializes the model.
         Parameters:
             backbone: torch module of the backbone to be used. See backbone.py
@@ -39,7 +39,7 @@ class DETR(nn.Module):
         assert self.ffn_model in ['old', 'new']
         if self.ffn_model == 'old':
             self.class_embed = nn.Linear(hidden_dim, num_classes + 1)  ## 类别分类器
-            self.intru_state_embed = nn.Linear(hidden_dim, 3)  ## 入侵状态分类器，一共有intru，non-intru，None三个类别 # for finetune_5
+            self.intru_state_embed = nn.Linear(hidden_dim, num_states + 1)  ## 入侵状态分类器，一共有intru，non-intru，None三个类别 # for finetune_5
             # self.intru_state_embed = nn.Linear(hidden_dim*2, 3) # for finetune_6
         elif self.ffn_model == 'new':
             self.class_embed = mlp_cls(output_dim=num_classes + 1)  # new FFN for class embedding
@@ -139,7 +139,7 @@ class SetCriterion(nn.Module):
         1) we compute hungarian assignment between ground truth boxes and the outputs of the model
         2) we supervise each pair of matched ground-truth / prediction (supervise class and box)
     """
-    def __init__(self, num_classes, matcher, weight_dict, eos_coef, losses):
+    def __init__(self, num_classes, num_states, matcher, weight_dict, eos_coef, losses):
         """ Create the criterion.
         Parameters:
             num_classes: number of object categories, omitting the special no-object category
@@ -150,13 +150,14 @@ class SetCriterion(nn.Module):
         """
         super().__init__()
         self.num_classes = num_classes
+        self.num_states = num_states
         self.matcher = matcher
         self.weight_dict = weight_dict
         self.eos_coef = eos_coef
         self.losses = losses
         empty_weight = torch.ones(self.num_classes + 1)
         # state_empty_weight = torch.ones(3)
-        state_empty_weight = torch.tensor([10.0, 1.0, 100.0])   ## 为避免类别不均衡，在cross entropy loss中增强类别权重：[None: 10.0, Non intrusion: 1.0, Intrusion: 100.0]
+        state_empty_weight = torch.tensor([10.0, 1.0, 100.0, 1.0])   ## 为避免类别不均衡，在cross entropy loss中增强类别权重：[None: 10.0, Non intrusion: 1.0, Intrusion: 100.0, No object: 1.0]
         empty_weight[-1] = self.eos_coef
         self.register_buffer('empty_weight', empty_weight)  # 设置模型中的参数不更新，并且参数能够保存下来，通过register_buffer登记过的张量：会自动成为模型中的参数，随着模型移动（gpu/cpu）而移动，但是不会随着梯度进行更新。
         self.register_buffer('state_empty_weight', state_empty_weight)
@@ -182,7 +183,7 @@ class SetCriterion(nn.Module):
             losses['class_error'] = 100 - accuracy(src_logits[idx], target_classes_o)[0]
         return losses
 
-    # 计算
+    ## 计算state loss
     def loss_states(self, outputs, targets, indices, num_boxes, log=True):
         """State loss (NLL)
         targets dicts must contain the key "states" containing a tensor of dim [nb_target_boxes]
@@ -192,13 +193,12 @@ class SetCriterion(nn.Module):
 
         idx = self._get_src_permutation_idx(indices)
         target_states_o = torch.cat([t["states"][J] for t, (_, J) in zip(targets, indices)])
-        target_states = torch.full(src_states.shape[:2], -1,
-                                    dtype=torch.int64, device=src_states.device)
+        target_states = torch.full(src_states.shape[:2], self.num_states,
+                                   dtype=torch.int64, device=src_states.device)
         target_states[idx] = target_states_o
 
         # 在计算cross_entropy损失时，target数据必须>0，不然会出现数据丢失的bug，loss也计算不出来
-        # 由于states的标签为[-1, 0, 1]，所以需要target_states+1变成[0, 1, 2]
-        loss_se = F.cross_entropy(src_states.transpose(1, 2), target_states+1, self.state_empty_weight)
+        loss_se = F.cross_entropy(src_states.transpose(1, 2), target_states, self.state_empty_weight)
         losses = {'loss_se': loss_se}
 
         if log:
@@ -333,7 +333,6 @@ class SetCriterion(nn.Module):
                     l_dict = self.get_loss(loss, aux_outputs, targets, indices, num_boxes, **kwargs)
                     l_dict = {k + f'_{i}': v for k, v in l_dict.items()}
                     losses.update(l_dict)
-
         return losses
 
 
@@ -430,7 +429,7 @@ def build(args):
     if args.dataset_file == 'coco':
         num_classes = 91
     elif args.dataset_file == 'intruscapes':
-        num_classes = 91
+        num_classes = 2
     else:
         num_classes = 20
     #num_classes = 20 if args.dataset_file != 'coco' else 91
@@ -448,6 +447,7 @@ def build(args):
         backbone,
         transformer,
         num_classes=num_classes,
+        num_states=args.num_states,
         num_queries=args.num_queries,
         train_mode=args.train_mode,
         aux_loss=args.aux_loss,
@@ -477,8 +477,8 @@ def build(args):
     losses = ['labels', 'boxes', 'cardinality', 'states']
     if args.masks:
         losses += ["masks"]
-    criterion = SetCriterion(num_classes, matcher=matcher, weight_dict=weight_dict,
-                             eos_coef=args.eos_coef, losses=losses)
+    criterion = SetCriterion(num_classes, num_states=args.num_states, matcher=matcher,
+                             weight_dict=weight_dict, eos_coef=args.eos_coef, losses=losses)
     criterion.to(device)
     postprocessors = {'bbox': PostProcess()}
     if args.masks:

@@ -93,11 +93,29 @@ def getAnns(file_name, image_id):
     return ann_info_list
 
 
+def changeStaAnns():
+    root_path = '/home/szy/detr/instances_val.json'
+    with open(root_path, 'r') as json_file:
+        annot = json.load(json_file)
+    print(annot.keys())
+    for ann in annot['annotations']:
+        if 'state' in ann:
+            ann['state'] = ann['state'] - 1
+        if 'category_id' in ann:
+            ann['category_id'] = ann['category_id'] - 1
+
+    f = open(root_path, 'w')
+    annot_ = json.dumps(annot, indent=4)
+    f.write(annot_)
+    f.close()
+
+
 if __name__ == '__main__':
-    main()
+    # main()
     #getFileList()
     #img_name = 'munster_000056_000019_gtIntrusionCityPersons.json'
     #getImgInfo(img_name, 1)
     #file_name = 'munster_000056_000019_gtIntrusionCityPersons.json'
     #getAnns(file_name, 1)
-    main_anns()
+    # main_anns()
+    changeStaAnns()

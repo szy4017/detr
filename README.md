@@ -8,12 +8,12 @@ Tips: label information.
 "categories": [
         {
             "supercategory": "person",
-            "id": 1,
+            "id": 0,
             "name": "pedestrian"
         },
         {
             "supercategory": "person",
-            "id": 2,
+            "id": 1,
             "name": "rider"
         }
     ],
