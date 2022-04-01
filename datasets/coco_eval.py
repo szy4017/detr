@@ -47,7 +47,7 @@ class CocoEvaluator(object):
 
         for iou_type in self.iou_types:
             results = self.prepare(predictions, iou_type)   ## 得到COCO形式的results<dict>
-            self.show_result(results)   # show the image results of class prediction and state prediction
+            # self.show_result(results)   # show the image results of class prediction and state prediction
 
             # suppress pycocotools prints
             with open(os.devnull, 'w') as devnull:
