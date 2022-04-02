@@ -120,6 +120,11 @@ class DETR(nn.Module):
         #out = {'pred_logits': outputs_class[-1], 'pred_boxes': outputs_coord[-1]}   # 最后选择transformer decoder最后一层的结果作为输出
         out = {'pred_logits': outputs_class[-1], 'pred_boxes': outputs_coord[-1], 'pred_states': outputs_intru_state[-1]}
 
+        ## 查看outputs_intru_state输出
+        # save = torch.reshape(outputs_intru_state, (-1, 4))
+        # idx_min = torch.argmin(save, dim=1)
+        # idx_max = torch.argmax(save, dim=1)
+
         if self.aux_loss:
             out['aux_outputs'] = self._set_aux_loss(outputs_class, outputs_coord, outputs_intru_state)   # 输出所有decoder层的结果，用于辅助分类器的损失计算
         return out
@@ -157,7 +162,7 @@ class SetCriterion(nn.Module):
         self.losses = losses
         empty_weight = torch.ones(self.num_classes + 1)
         # state_empty_weight = torch.ones(3)
-        state_empty_weight = torch.tensor([10.0, 1.0, 100.0, 1.0])   ## 为避免类别不均衡，在cross entropy loss中增强类别权重：[None: 10.0, Non intrusion: 1.0, Intrusion: 100.0, No object: 1.0]
+        state_empty_weight = torch.tensor([1.0, 100.0, 500.0, 1.0])   ## 为避免类别不均衡，在cross entropy loss中增强类别权重：[None: 1.0, Non intrusion: 10.0, Intrusion: 50.0, No object: 1.0]
         empty_weight[-1] = self.eos_coef
         self.register_buffer('empty_weight', empty_weight)  # 设置模型中的参数不更新，并且参数能够保存下来，通过register_buffer登记过的张量：会自动成为模型中的参数，随着模型移动（gpu/cpu）而移动，但是不会随着梯度进行更新。
         self.register_buffer('state_empty_weight', state_empty_weight)
@@ -177,6 +182,11 @@ class SetCriterion(nn.Module):
 
         loss_ce = F.cross_entropy(src_logits.transpose(1, 2), target_classes, self.empty_weight)
         losses = {'loss_ce': loss_ce}
+
+        ## 查看src_states结果
+        save = src_logits[0]
+        idx_min = torch.argmin(save, dim=1)
+        idx_max = torch.argmax(save, dim=1)
 
         if log:
             # TODO this should probably be a separate loss, not hacked in this one here
@@ -200,6 +210,11 @@ class SetCriterion(nn.Module):
         # 在计算cross_entropy损失时，target数据必须>0，不然会出现数据丢失的bug，loss也计算不出来
         loss_se = F.cross_entropy(src_states.transpose(1, 2), target_states, self.state_empty_weight)
         losses = {'loss_se': loss_se}
+
+        ## 查看src_states结果
+        save = src_states[0]
+        idx_min = torch.argmin(save, dim=1)
+        idx_max = torch.argmax(save, dim=1)
 
         if log:
             # TODO this should probably be a separate loss, not hacked in this one here

@@ -346,7 +346,7 @@ def evaluate(self):
     elif p.iouType == 'keypoints':
         computeIoU = self.computeOks
     self.ious = {
-        (imgId, catId): computeIoU(imgId, catId)
+        (imgId, catId): computeIoU(imgId, catId, mode='cls')
         for imgId in p.imgIds
         for catId in catIds}
 
@@ -397,7 +397,7 @@ def evaluatestate(self):
     elif p.iouType == 'keypoints':
         computeIoU = self.computeOks
     self.ious = {
-        (imgId, staId): computeIoU(imgId, staId)
+        (imgId, staId): computeIoU(imgId, staId, mode='sta')
         for imgId in p.imgIds
         for staId in staIds}
 

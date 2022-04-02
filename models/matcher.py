@@ -28,9 +28,9 @@ class HungarianMatcher(nn.Module):
         """
         super().__init__()
         self.cost_class = cost_class
+        self.cost_state = cost_state
         self.cost_bbox = cost_bbox
         self.cost_giou = cost_giou
-        self.cost_state = cost_state
         assert cost_class != 0 or cost_bbox != 0 or cost_giou != 0, "all costs cant be 0"
 
     @torch.no_grad()
@@ -53,21 +53,27 @@ class HungarianMatcher(nn.Module):
                 - index_j is the indices of the corresponding selected targets (in order)
             For each batch element, it holds:
                 len(index_i) = len(index_j) = min(num_queries, num_target_boxes)
+
+        Problem:
+            会出现没有匹配对象的情况，这个点可以改进一下
         """
         bs, num_queries = outputs["pred_logits"].shape[:2]
 
         # We flatten to compute the cost matrices in a batch
         out_prob = outputs["pred_logits"].flatten(0, 1).softmax(-1)  # [batch_size * num_queries, num_classes]
+        out_sta = outputs["pred_states"].flatten(0, 1).softmax(-1)  # [batch_size * num_queries, num_states]
         out_bbox = outputs["pred_boxes"].flatten(0, 1)  # [batch_size * num_queries, 4]
 
         # Also concat the target labels and boxes
         tgt_ids = torch.cat([v["labels"] for v in targets])
+        tgt_stas = torch.cat([v["states"] for v in targets])
         tgt_bbox = torch.cat([v["boxes"] for v in targets])
 
         # Compute the classification cost. Contrary to the loss, we don't use the NLL,
         # but approximate it in 1 - proba[target class].
         # The 1 is a constant that doesn't change the matching, it can be ommitted.
         cost_class = -out_prob[:, tgt_ids]
+        cost_state = -out_sta[:, tgt_stas]
 
         # Compute the L1 cost between boxes
         cost_bbox = torch.cdist(out_bbox, tgt_bbox, p=1)
@@ -76,11 +82,17 @@ class HungarianMatcher(nn.Module):
         cost_giou = -generalized_box_iou(box_cxcywh_to_xyxy(out_bbox), box_cxcywh_to_xyxy(tgt_bbox))
 
         # Final cost matrix
-        C = self.cost_bbox * cost_bbox + self.cost_class * cost_class + self.cost_giou * cost_giou
+        C = self.cost_bbox * cost_bbox + self.cost_class * cost_class + self.cost_state * cost_state + self.cost_giou * cost_giou
         C = C.view(bs, num_queries, -1).cpu()
 
         sizes = [len(v["boxes"]) for v in targets]
-        indices = [linear_sum_assignment(c[i]) for i, c in enumerate(C.split(sizes, -1))]
+
+        ## 匈牙利算法线性匹配
+        indices = list()
+        for i, c in enumerate(C.split(sizes, -1)):
+            ind = linear_sum_assignment(c[i])
+            indices.append(ind)
+
         return [(torch.as_tensor(i, dtype=torch.int64), torch.as_tensor(j, dtype=torch.int64)) for i, j in indices]
 
 

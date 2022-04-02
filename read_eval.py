@@ -184,7 +184,7 @@ def test_cross_entropy():
     import torch.nn as nn
     x_input = torch.randn(3, 3)  # 随机生成输入
     print('x_input:\n', x_input)
-    y_target = torch.tensor([1, 2, 3])  # 设置输出具体值 print('y_target\n',y_target)
+    y_target = torch.tensor([1, 2, 2])  # 设置输出具体值 print('y_target\n',y_target)
 
     # 计算输入softmax，此时可以看到每一行加到一起结果都是1
     softmax_func = nn.Softmax(dim=1)
@@ -206,7 +206,7 @@ def test_cross_entropy():
     print('nlloss_output:\n', nlloss_output)
 
     # 直接使用pytorch中的loss_func=nn.CrossEntropyLoss()看与经过NLLLoss的计算是不是一样
-    crossentropyloss = nn.CrossEntropyLoss()
+    crossentropyloss = nn.CrossEntropyLoss(weight=torch.tensor([1.0, 1.0, 100.0]))
     crossentropyloss_output = crossentropyloss(x_input, y_target)
     print('crossentropyloss_output:\n', crossentropyloss_output)
 
