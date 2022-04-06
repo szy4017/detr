@@ -268,7 +268,7 @@ def main(args):
 
 if __name__ == '__main__':
     import os
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
@@ -297,7 +297,7 @@ if __name__ == '__main__':
     # for training
     elif args.mode == 'train':
         # args.output_dir = './results_pretrain_state_test'
-        args.output_dir = './results_pretrain_state_finetune_9'
+        args.output_dir = './results_pretrain_state_finetune_10'
         if args.output_dir:
             Path(args.output_dir).mkdir(parents=True, exist_ok=True)
         args.batch_size = 2
@@ -311,5 +311,5 @@ if __name__ == '__main__':
         args.train_mode = 'finetune'
         args.epochs = 400
         args.sta_query = False
-        args.ffn_model = 'old'
+        args.ffn_model = 'new'
         main(args)

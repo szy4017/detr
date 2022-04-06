@@ -43,7 +43,7 @@ class DETR(nn.Module):
             # self.intru_state_embed = nn.Linear(hidden_dim*2, 3) # for finetune_6
         elif self.ffn_model == 'new':
             self.class_embed = mlp_cls(output_dim=num_classes + 1)  # new FFN for class embedding
-            self.intru_state_embed = mlp_sta()  # new FFN for state embedding
+            self.intru_state_embed = mlp_sta(output_dim=num_states + 1)  # new FFN for state embedding
         self.bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3) ## 位置分类器
         self.query_embed = nn.Embedding(num_queries, hidden_dim)
         self.input_proj = nn.Conv2d(backbone.num_channels, hidden_dim, kernel_size=1)

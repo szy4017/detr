@@ -65,6 +65,7 @@ class CocoEvaluator(object):
 
             self.eval_imgs[iou_type].append(eval_imgs)
             self.eval_imgs_state[iou_type].append(eval_imgs_state)
+            pass
 
     # 显示预测结果
     def show_result(self, results):
