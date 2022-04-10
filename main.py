@@ -272,7 +272,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
-    # args.mode = 'eval'
+    args.mode = 'eval'
     # for evaluation
     if args.mode == 'eval':
         args.output_dir = './results'
@@ -284,11 +284,13 @@ if __name__ == '__main__':
         # args.resume = '/home/szy/detr/checkpoints/detr-r50-e632da11.pth'
         # args.resume = '/home/szy/detr/results/checkpoint0299.pth'
         # args.resume = '/home/szy/detr/results_pretrain_complete/checkpoint0199.pth'
-        args.resume = '/home/szy/detr/results_pretrain_state_finetune_9/checkpoint.pth'
+        # args.resume = '/home/szy/detr/results_pretrain_state_finetune_9/checkpoint.pth'
+        args.resume = './results_pretrain_state_finetune_9/checkpoint.pth'
         # args.dataset_file = 'coco'
         args.dataset_file = 'intruscapes'
         # args.coco_path = '/home/szy/data/coco'
-        args.coco_path = '/home/szy/data/intruscapes'
+        # args.coco_path = '/home/szy/data/intruscapes'
+        args.coco_path = '/data/szy4017/data/intruscapes'
         args.sta_query = False
         args.num_queries = 50
         args.train_mode = 'finetune'
