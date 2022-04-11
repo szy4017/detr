@@ -272,46 +272,47 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
-    args.mode = 'eval'
+    # args.mode = 'eval'
     # for evaluation
     if args.mode == 'eval':
+        # eval setting
+        args.eval = True
+        args.batch_size = 4
+        args.dataset_file = 'intruscapes'
+        # args.coco_path = '/home/szy/data/intruscapes' # for old server
+        args.coco_path = '/data/szy4017/data/intruscapes'   # for new server
+        args.resume = './results_pretrain_state_finetune_9/checkpoint.pth'
         args.output_dir = './results'
         if args.output_dir:
             Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-        args.batch_size = 2
-        args.no_aux_loss = True
-        args.eval = True
-        # args.resume = '/home/szy/detr/checkpoints/detr-r50-e632da11.pth'
-        # args.resume = '/home/szy/detr/results/checkpoint0299.pth'
-        # args.resume = '/home/szy/detr/results_pretrain_complete/checkpoint0199.pth'
-        # args.resume = '/home/szy/detr/results_pretrain_state_finetune_9/checkpoint.pth'
-        args.resume = './results_pretrain_state_finetune_9/checkpoint.pth'
-        # args.dataset_file = 'coco'
-        args.dataset_file = 'intruscapes'
-        # args.coco_path = '/home/szy/data/coco'
-        # args.coco_path = '/home/szy/data/intruscapes'
-        args.coco_path = '/data/szy4017/data/intruscapes'
+
+        # model setting
         args.sta_query = False
         args.num_queries = 50
-        args.train_mode = 'finetune'
         args.ffn_model = 'old'
+        args.aux_loss = True
+        args.train_mode = 'finetune'
+
         main(args)
+
     # for training
     elif args.mode == 'train':
-        # args.output_dir = './results_pretrain_state_test'
-        args.output_dir = './results_pretrain_state_finetune_10'
+        # training setting
+        args.batch_size = 4
+        args.epochs = 400
+        args.dataset_file = 'intruscapes'
+        # args.coco_path = '/home/szy/data/intruscapes' # for old server
+        args.coco_path = '/data/szy4017/data/intruscapes'   # for new server
+        args.output_dir = './results_pretrain_state_finetune_8'
         if args.output_dir:
             Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-        args.batch_size = 2
-        args.aux_loss = True
-        args.resume = '/home/szy/detr/checkpoints/detr-r50-e632da11.pth'
-        # args.resume = '/home/szy/detr/base_checkpoint_1_1.pth'
-        # args.resume = '/home/szy/detr/results_pretrain_state_finetune/checkpoint0099.pth'
-        args.dataset_file = 'intruscapes'
-        args.coco_path = '/home/szy/data/intruscapes'
-        args.num_queries = 50
-        args.train_mode = 'finetune'
-        args.epochs = 400
+
+        # model setting
         args.sta_query = False
-        args.ffn_model = 'new'
+        args.num_queries = 50
+        args.ffn_model = 'old'
+        args.aux_loss = True
+        args.train_mode = 'finetune'
+        args.resume = './checkpoints/detr-r50-e632da11.pth'
+
         main(args)
