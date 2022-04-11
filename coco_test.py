@@ -104,7 +104,7 @@ def getFileList():
     return file_list
 
 def test_Mycoco():
-    annFile_path = '/home/szy/detr/Mycoco.json'
+    annFile_path = './Mycoco.json'
     coco = COCO(annFile_path)
     print(coco)
     print(coco.getCatIds())
@@ -270,4 +270,5 @@ if __name__ == '__main__':
     #main_cityintrusion()
     #main_cityintrusion_train()
     #Mycoco_eval()
-    Mycoco_result()
+    # Mycoco_result()
+    test_Mycoco()
