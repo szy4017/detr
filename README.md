@@ -3,6 +3,15 @@
 PyTorch training code and pretrained models for **DETR** (**DE**tection **TR**ansformer).
 We replace the full complex hand-crafted object detection pipeline with a Transformer, and match Faster R-CNN with a ResNet-50, obtaining **42 AP** on COCO using half the computation power (FLOPs) and the same number of parameters. Inference in 50 lines of PyTorch.
 
+Tips: Install environments
+```
+torch==1.10.1
+torchvision>=0.11.2
+pycocotools-state
+cython
+scipy
+```
+
 Tips: label information.
 ```
 "categories": [
@@ -235,7 +244,7 @@ git clone https://github.com/facebookresearch/detr.git
 ```
 Then, install PyTorch 1.5+ and torchvision 0.6+:
 ```
-conda install -c pytorch pytorch torchvision
+conda install -c pytorch torchvision
 ```
 Install pycocotools (for evaluation on COCO) and scipy (for training):
 ```
@@ -291,12 +300,12 @@ The structure of annotation file is following:
     {
         "id": 0,
         "image_id": 0,
-        "category_id": 1,
+        "category_id": 0,
         "segmentation":[[]],
         "area": 1265.0,
         "bbox": [1170, 432, 23, 55],
         "iscrowd": 0,
-        "state": -1
+        "state": 0
     }
 ]
 
@@ -304,27 +313,29 @@ The structure of annotation file is following:
 "categories": [
     {
         "supercategory": "person",
-        "id": 1,
+        "id": 0,
         "name": "pedestrian"
     },
     {
         "supercategory": "person",
-        "id": 2,
+        "id": 1,
         "name": "rider"
-    },
+    }
+]
+"intrusion_states": [
     {
         "supercategory": "intrusion label",
-        "id": 3,
+        "id": 0,
         "name": "None"
     },
     {
         "supercategory": "intrusion label",
-        "id": 4,
+        "id": 1,
         "name": "Non Intrusion"
     },
     {
         "supercategory": "intrusion label",
-        "id": 5,
+        "id": 2,
         "name": "Intrusion"
      }
 ]
