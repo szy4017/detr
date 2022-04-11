@@ -28,6 +28,8 @@ def get_args_parser():
     parser.add_argument('--num_states', default=3, type=int)
     parser.add_argument('--mode', default='train', type=str,
                         help="The mode of model, train mode or eval mode")
+    parser.add_argument('--train_mode', default='finetune', type=str,
+                        help='the mode of model training')
     parser.add_argument('--clip_max_norm', default=0.1, type=float,
                         help="gradient clipping max norm")
 
@@ -98,7 +100,6 @@ def get_args_parser():
     parser.add_argument('--coco_path', type=str)
     parser.add_argument('--coco_panoptic_path', type=str)
     parser.add_argument('--remove_difficult', action='store_true')
-
     parser.add_argument('--output_dir', default='',
                         help='path where to save, empty for no saving')
     parser.add_argument('--device', default='cuda',
@@ -114,7 +115,6 @@ def get_args_parser():
     parser.add_argument('--world_size', default=1, type=int,
                         help='number of distributed processes')
     parser.add_argument('--dist_url', default='env://', help='url used to set up distributed training')
-    parser.add_argument('--train_mode', default='finetune', type=str, help='the mode of model training')
     return parser
 
 
@@ -268,7 +268,14 @@ def main(args):
 
 if __name__ == '__main__':
     import os
-    os.environ['CUDA_VISIBLE_DEVICES'] = '5'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0, 1'
+    torch.distributed.launch
+    torch.distributed.init_process_group(backend="nccl")
+    # os.environ['RANK'] = '0'
+    # os.environ['WORLD_SIZE'] = '2'
+    # os.environ['LOCAL_RANK'] = '1'
+    # os.environ['MASTER_ADDR'] = 'localhost'
+    # os.environ['MASTER_PORT'] = '3311'
 
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
