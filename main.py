@@ -5,10 +5,12 @@ import json
 import random
 import time
 from pathlib import Path
+import os
 
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, DistributedSampler
+import torch.multiprocessing as mp
 
 import datasets
 import util.misc as utils
@@ -118,8 +120,8 @@ def get_args_parser():
     return parser
 
 
-def main(args):
-    utils.init_distributed_mode(args)
+def main(rank, ws, args):
+    utils.init_distributed_mode(rank, ws, args)
     print("git:\n  {}\n".format(utils.get_sha()))
 
     if args.frozen_weights is not None:
@@ -139,6 +141,7 @@ def main(args):
 
     model_without_ddp = model
     if args.distributed:
+        args.gpu = rank
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
         model_without_ddp = model.module
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -267,15 +270,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    import os
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0, 1'
-    torch.distributed.launch
-    torch.distributed.init_process_group(backend="nccl")
-    # os.environ['RANK'] = '0'
-    # os.environ['WORLD_SIZE'] = '2'
-    # os.environ['LOCAL_RANK'] = '1'
-    # os.environ['MASTER_ADDR'] = 'localhost'
-    # os.environ['MASTER_PORT'] = '3311'
+    os.environ["CUDA_VISIBLE_DEVICES"] = '3, 4, 5'
 
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
@@ -310,16 +305,18 @@ if __name__ == '__main__':
         args.dataset_file = 'intruscapes'
         # args.coco_path = '/home/szy/data/intruscapes' # for old server
         args.coco_path = '/data/szy4017/data/intruscapes'   # for new server
-        args.output_dir = './results_pretrain_state_finetune_8'
+        args.output_dir = './results_pretrain_state_finetune_7'
         if args.output_dir:
             Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
         # model setting
         args.sta_query = False
-        args.num_queries = 50
+        args.num_queries = 500
         args.ffn_model = 'old'
         args.aux_loss = True
         args.train_mode = 'finetune'
         args.resume = './checkpoints/detr-r50-e632da11.pth'
 
-        main(args)
+        # main(args)
+        args.world_size = 3 # for distributed training
+        mp.spawn(main, nprocs=args.world_size, args=(args.world_size, args))    # for distributed training

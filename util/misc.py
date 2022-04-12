@@ -408,8 +408,13 @@ def save_on_master(*args, **kwargs):
         torch.save(*args, **kwargs)
 
 
-def init_distributed_mode(args):
-    torch.distributed.init_process_group(backend="nccl")
+def init_distributed_mode(rank, ws, args):
+    dist.init_process_group(backend='nccl', init_method='tcp://10.15.198.46:3311',
+                            world_size=ws, rank=rank)
+    rank = dist.get_rank()
+    print(f"rank = {rank} is initialized")
+    torch.cuda.set_device(rank)
+    args.distributed = True
 
     # if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
     #     args.rank = int(os.environ["RANK"])
@@ -423,18 +428,18 @@ def init_distributed_mode(args):
     #     args.distributed = False
     #     return
 
-    args.distributed = True
 
-    torch.cuda.set_device(args.gpu)
-    args.dist_backend = 'nccl'
-    print('| distributed init (rank {}): {}'.format(
-        args.rank, args.dist_url), flush=True)
+
+    # torch.cuda.set_device(args.gpu)
+    # args.dist_backend = 'nccl'
+    # print('| distributed init (rank {}): {}'.format(
+        # args.rank, args.dist_url), flush=True)
     # torch.distributed.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                          # world_size=args.world_size, rank=args.rank)
-    torch.distributed.init_process_group(backend="nccl")
+    # torch.distributed.init_process_group(backend="nccl")
     # torch.distributed.init_process_group(backend=args.dist_backend, world_size=args.world_size, rank=args.rank)
-    torch.distributed.barrier()
-    setup_for_distributed(args.rank == 0)
+    # torch.distributed.barrier()
+    # setup_for_distributed(args.rank == 0)
 
 
 @torch.no_grad()
