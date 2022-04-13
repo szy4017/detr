@@ -5,6 +5,8 @@ DETR model and criterion classes.
 import torch
 import torch.nn.functional as F
 from torch import nn
+from torch import autograd
+from torchvision import transforms
 import numpy as np
 
 from util import box_ops
@@ -36,10 +38,15 @@ class DETR(nn.Module):
         self.transformer = transformer
         hidden_dim = transformer.d_model
         self.ffn_model = ffn_model
+        self.sta_query = sta_query
         assert self.ffn_model in ['old', 'new']
         if self.ffn_model == 'old':
-            self.class_embed = nn.Linear(hidden_dim, num_classes + 1)  ## 类别分类器
-            self.intru_state_embed = nn.Linear(hidden_dim, num_states + 1)  ## 入侵状态分类器，一共有intru，non-intru，None三个类别 # for finetune_5
+            if self.sta_query:
+                self.class_embed = nn.Linear(hidden_dim, num_classes + 1)  ## 类别分类器
+                self.intru_state_embed = nn.Linear(hidden_dim*2, num_states + 1)  ## 入侵状态分类器，一共有intru，non-intru，None三个类别 # for finetune_5
+            else:
+                self.class_embed = nn.Linear(hidden_dim, num_classes + 1)  ## 类别分类器
+                self.intru_state_embed = nn.Linear(hidden_dim, num_states + 1)  ## 入侵状态分类器，一共有intru，non-intru，None三个类别 # for finetune_5
             # self.intru_state_embed = nn.Linear(hidden_dim*2, 3) # for finetune_6
         elif self.ffn_model == 'new':
             self.class_embed = mlp_cls(output_dim=num_classes + 1)  # new FFN for class embedding
@@ -50,7 +57,6 @@ class DETR(nn.Module):
         self.backbone = backbone
         self.train_mode = train_mode
         self.aux_loss = aux_loss
-        self.sta_query = sta_query
 
     def forward(self, samples: NestedTensor):
         """ The forward expects a NestedTensor, which consists of:
