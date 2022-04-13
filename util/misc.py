@@ -409,6 +409,10 @@ def save_on_master(*args, **kwargs):
 
 
 def init_distributed_mode(rank, ws, args):
+    if args.distributed_mode == False:
+        args.distributed = False
+        return None
+
     dist.init_process_group(backend='nccl', init_method='tcp://10.15.198.46:3311',
                             world_size=ws, rank=rank)
     rank = dist.get_rank()

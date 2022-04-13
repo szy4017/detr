@@ -6,7 +6,7 @@ We replace the full complex hand-crafted object detection pipeline with a Transf
 Tips: Install environments
 ```
 torch==1.10.1
-torchvision>=0.11.2
+torchvision==0.11.2
 pycocotools-state
 cython
 scipy
@@ -74,7 +74,7 @@ Tips: label information.
 1. 不载入预训练参数，直接训练，训练结果可能会发散，无法训练成功；
 2. 载入预训练参数，不改变class分类器结构，改变输出类别数（91->2）,训练能收敛，但最终训练效果较差；
 3. 载入预训练参数，改变class分类器结构，测试中；
-找到问题原有：
+找到问题原因：
 出现训练不成功的主要原因在于初始参数加载的问题。由于加载的是预训练模型的参数，一开始采用的在state_dict中选取`backbone`和
 `transformer`字段进行load，这样load参数可能会有一部分字段没有load进来，导致训练不成功。现在采用state_dict和model_dict
 字段匹配的方法进行load，只要两个dict里面的有相同的字段，并且字段对应的参数shape相同就load进来，这样训练是可行的。
@@ -86,6 +86,14 @@ Tips: label information.
 中再设置一组state query来抓取与state相关的特征；
 3. 调研其他detr相关工作的改进方法；
 4. 调研transfomer模型应用于小数据集的方法。
+
+**20220413**
+1. encoder和decoder分析，如果encoder中只编码了与物体类别相关的信息，那么decoder无论怎么query都无法获得物体在图像空间中相互关系信息，
+那么可以考虑再加一个spatial path来获取图像空间信息，然后在state query中将encoder中的信息和spatial path中的信息进行融合，这里spatial
+path可以采用一个简单的卷积网络（类似BiSiNet中的SP）。当然需要通过实验来可视化encoder中编码的关注点在哪里；
+2. 对于VIT结构的思考，目前看到的VIT结构，在attention layer中序列长度都是不变的，这里长序列可以实现高解析度的图像互相关系建模，但是长序列
+难以训练；短序列训练更容易但是图像关系建模能力较弱。可以类似cnn逐级降采样的方式，在attention layer中逐级降低序列长度，既可以实现高解析度
+的建模分析又可以缓解模型训练的困难；需要进步调研有没有相关工作。
 
 ![Positional Encoding](.github/positional_encoding.PNG)
 

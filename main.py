@@ -32,6 +32,7 @@ def get_args_parser():
                         help="The mode of model, train mode or eval mode")
     parser.add_argument('--train_mode', default='finetune', type=str,
                         help='the mode of model training')
+    parser.add_argument('--distributed_mode', default=True, type=bool)
     parser.add_argument('--clip_max_norm', default=0.1, type=float,
                         help="gradient clipping max norm")
 
@@ -270,7 +271,7 @@ def main(rank, ws, args):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = '3, 4, 5'
+    os.environ["CUDA_VISIBLE_DEVICES"] = '3'
 
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
@@ -283,29 +284,7 @@ if __name__ == '__main__':
         args.dataset_file = 'intruscapes'
         # args.coco_path = '/home/szy/data/intruscapes' # for old server
         args.coco_path = '/data/szy4017/data/intruscapes'   # for new server
-        args.resume = './results_pretrain_state_finetune_9/checkpoint.pth'
         args.output_dir = './results'
-        if args.output_dir:
-            Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-
-        # model setting
-        args.sta_query = False
-        args.num_queries = 50
-        args.ffn_model = 'old'
-        args.aux_loss = True
-        args.train_mode = 'finetune'
-
-        main(args)
-
-    # for training
-    elif args.mode == 'train':
-        # training setting
-        args.batch_size = 4
-        args.epochs = 400
-        args.dataset_file = 'intruscapes'
-        # args.coco_path = '/home/szy/data/intruscapes' # for old server
-        args.coco_path = '/data/szy4017/data/intruscapes'   # for new server
-        args.output_dir = './results_pretrain_state_finetune_7'
         if args.output_dir:
             Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -315,8 +294,34 @@ if __name__ == '__main__':
         args.ffn_model = 'old'
         args.aux_loss = True
         args.train_mode = 'finetune'
+        args.resume = './results_pretrain_state_finetune_7/checkpoint.pth'
+
+        args.distributed_mode = False
+        main(None, None, args)
+
+    # for training
+    elif args.mode == 'train':
+        # training setting
+        args.batch_size = 4
+        args.epochs = 400
+        args.dataset_file = 'intruscapes'
+        # args.coco_path = '/home/szy/data/intruscapes' # for old server
+        args.coco_path = '/data/szy4017/data/intruscapes'   # for new server
+        args.output_dir = './results_pretrain_state_finetune_6'
+        if args.output_dir:
+            Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+
+        # model setting
+        args.sta_query = False
+        args.num_queries = 50
+        args.ffn_model = 'old'
+        args.aux_loss = True
+        args.train_mode = 'feature_base'
         args.resume = './checkpoints/detr-r50-e632da11.pth'
 
-        # main(args)
-        args.world_size = 3 # for distributed training
-        mp.spawn(main, nprocs=args.world_size, args=(args.world_size, args))    # for distributed training
+        args.distributed_mode = False
+        if args.distributed_mode:
+            args.world_size = 2
+            mp.spawn(main, nprocs=args.world_size, args=(args.world_size, args))  # for distributed training
+        else:
+            main(None, None, args)
