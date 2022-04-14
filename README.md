@@ -95,6 +95,21 @@ path可以采用一个简单的卷积网络（类似BiSiNet中的SP）。当然�
 难以训练；短序列训练更容易但是图像关系建模能力较弱。可以类似cnn逐级降采样的方式，在attention layer中逐级降低序列长度，既可以实现高解析度
 的建模分析又可以缓解模型训练的困难；需要进步调研有没有相关工作。
 
+**20220414读deformable detr有感**
+1. deformable detr主要采用减少attention module的采样点数量的方式来降低detr的计算复杂度和训练迭代次数。这里由于attention module的初始
+权重是均匀分布的，而在训练之后权重分布是很稀疏的，所以对训练长序列输入的attention module是很不友好的。deformable detr是采用获取key sample
+的方式代替特征图整理sample的方式来减少attention module的序列输出。在encoder过程是采用这种方法来重新编码特征图，在decoder过程是采用这种方法
+来获取与object相关的key sample。个人认为在在decoder中采用这种key sample获取的方式是更高效的，而在encoder中采用这种方法可能会导致特征编码不完全
+的情况。可提出一个新的设想，在目前的detr和deformable detr中attention module的每层之间的序列输入都是相同的，如果设置每层序列的降采样，类似CNN
+特征图降采样，会不会有更高效的结果。设想的具体实施：即在一层attention module之后采用一个MLP将序列长度降采样（或许序列中特征向量的长度可以增加？），经过
+几层attention module之后就得到了一个多尺度的attention feature map。设想的根据：由于训练之后的attention权重呈现一种稀疏状态，那么用MLP实现序列中
+无关特征向量的聚合是更高效的选择，只留下关系更相关的特征向量进行attention操作。
+2. deformable detr中decoder的设计是高效的，其中迭代式的box回归方法值得应用，采用参考点偏置回归方法，这些方法可以应用于object query。state query
+是否需要从encoder中取获取特征呢？因为object query已经是从encoder中获取了与目标相关的所有信息，state query再获取一边是否有效？需要考察一下object query
+和state query的分布是否不同，他们是否再encoder中获取了不同的特征用于不同的特征预测。个人感觉encoder中的编码因为经过attention module已经具备了联系图像
+全局的特征，图像位置空间特性将变弱，而CNN backbone输出的特征图中仍保持了充分的图像空间特性，由于state query的目的是获取与目标相关的周围空间信息，如果设计
+state query是根据object query的结果来去从CNN backbone中获取空间特征是否更有利于state的预测？
+
 ![Positional Encoding](.github/positional_encoding.PNG)
 
 **What it is**. Unlike traditional computer vision techniques, DETR approaches object detection as a direct set prediction problem. It consists of a set-based global loss, which forces unique predictions via bipartite matching, and a Transformer encoder-decoder architecture. 

@@ -3,8 +3,12 @@ from torch import autograd
 from torchvision import models
 from torchvision import transforms
 from torch.nn import functional as F
+import torchvision.transforms.functional as TF
 import cv2
 import numpy as np
+import os
+from matplotlib import pyplot as plt
+import matplotlib.patches as patches
 
 def simple_test():
     x = torch.tensor([1., 2.], requires_grad=True)
@@ -40,11 +44,15 @@ def cnn_test():
     input = input.transpose(2, 0, 1)
     input = np.expand_dims(input, axis=0)
     input = torch.from_numpy(input).float()
-    input.requires_grad = True
     input = F.normalize(input, p=2, dim=2)
     shape_aug = transforms.RandomResizedCrop(64, scale=(0.1, 1), ratio=(0.5, 2))
     input = shape_aug(input)
+    input.requires_grad = True
+
     output = model(input)
+
+    output.backward()
+    print(input.grad.data.numpy())
 
     grad = autograd.grad(output, [input])
     input_grad = grad[0]
@@ -70,5 +78,132 @@ def cnn_test():
     image_test.save('./example_test.jpg')
 
 
+def detr_test():
+    # set arguments
+    import argparse
+    from pathlib import Path
+    from main import get_args_parser
+    parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
+    args = parser.parse_args()
+    # eval setting
+    args.eval = True
+    args.batch_size = 1
+    args.dataset_file = 'intruscapes'
+    # args.coco_path = '/home/szy/data/intruscapes' # for old server
+    args.coco_path = '/data/szy4017/data/intruscapes'  # for new server
+    args.output_dir = './results'
+    if args.output_dir:
+        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+
+    # model setting
+    args.sta_query = False
+    args.num_queries = 50
+    args.ffn_model = 'old'
+    args.aux_loss = True
+    args.train_mode = 'finetune'
+    args.resume = './results_pretrain_state_finetune_9/checkpoint.pth'
+
+    args.distributed_mode = False
+
+    device = torch.device(args.device)
+
+    # build model
+    from models import build_model
+    model, criterion, postprocessors = build_model(args)
+    model.to(device)
+    checkpoint = torch.load('../results_pretrain_state_finetune_9/checkpoint.pth', map_location='cpu')
+    model.load_state_dict(checkpoint['model'])
+
+    # build dataset
+    from torch.utils.data import DataLoader
+    from datasets import build_dataset
+    import util.misc as utils
+    dataset_val = build_dataset(image_set='val', args=args)
+    sampler_val = torch.utils.data.SequentialSampler(dataset_val)
+    data_loader_val = DataLoader(dataset_val, args.batch_size, sampler=sampler_val,
+                                 drop_last=False, collate_fn=utils.collate_fn, num_workers=args.num_workers)
+
+    # build optimizer
+    param_dicts = [
+        {"params": [p for n, p in model.named_parameters() if "backbone" not in n and p.requires_grad]},
+        {
+            "params": [p for n, p in model.named_parameters() if "backbone" in n and p.requires_grad],
+            "lr": args.lr_backbone,
+        },
+    ]
+    optimizer = torch.optim.AdamW(param_dicts, lr=args.lr,
+                                  weight_decay=args.weight_decay)
+    optimizer.load_state_dict(checkpoint['optimizer'])
+
+    # get grad
+    for samples, targets in data_loader_val:
+        samples = samples.to(device)
+        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+        samples.tensors.requires_grad = True
+        input_image = unnormalize(samples.tensors)
+        outputs = model(samples)
+
+        orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)
+        results = postprocessors['bbox'](outputs, orig_target_sizes)
+        index_scores = np.where(results[0]['scores'].cpu().detach().numpy() > 0.5)
+        index_labels = np.where(results[0]['labels'].cpu().detach().numpy() == 0)
+        index_list = list()
+        for s in index_scores[0]:
+            for l in index_labels[0]:
+                if s == l:
+                    index_list.append(s)
+
+        for i in index_list:
+            get_output = outputs['pred_logits'][:, i, 0]
+            get_box = results[0]['boxes'][i, :].cpu().detach().numpy()
+
+            optimizer.zero_grad()
+            get_output.backward(torch.ones_like(get_output), retain_graph=True)
+            optimizer.zero_grad()
+            grad = samples.tensors.grad.data.cpu()
+
+            # visualize grad
+            grad = TF.resize(grad, [1024, 2048])
+            unloader = transforms.ToPILImage()
+            grad_image = grad.clone()  # clone the tensor
+            grad_image = grad_image.squeeze(0)  # remove the fake batch dimension
+            grad_image = unloader(grad_image)
+            grad_image = np.array(grad_image)
+            plt.figure()
+            currentAxis = plt.gca()
+            rect = patches.Rectangle((get_box[0], get_box[1]), get_box[2]-get_box[0], get_box[3]-get_box[1], linewidth=1, edgecolor='r', facecolor='none')
+            currentAxis.add_patch(rect)
+            plt.imshow(grad_image)
+            plt.show()
+
+            grad_real_image = np.array(grad_image)*0.5 + input_image
+            plt.figure()
+            currentAxis = plt.gca()
+            rect = patches.Rectangle((get_box[0], get_box[1]), get_box[2]-get_box[0], get_box[3]-get_box[1], linewidth=1, edgecolor='r', facecolor='none')
+            currentAxis.add_patch(rect)
+            plt.imshow(grad_real_image)
+            plt.show()
+            pass
+
+
+
+def unnormalize(img):
+    img = TF.resize(img, [1024, 2048])
+    img = img.cpu().squeeze().detach().numpy()
+    img = np.transpose(img, (1, 2, 0))
+    mean = [0.485, 0.456, 0.406]
+    std = [0.485, 0.456, 0.406]
+    img = img * std + mean     # unnormalize
+    plt.figure()
+    plt.imshow(img)
+    # plt.imshow(np.transpose(img, (1, 2, 0)))
+    plt.show()
+
+    return img
+
+
 if __name__ == '__main__':
-    cnn_test()
+    # cnn_test()
+
+    os.environ["CUDA_VISIBLE_DEVICES"] = '1'
+    detr_test()
