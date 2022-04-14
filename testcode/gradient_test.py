@@ -152,9 +152,11 @@ def detr_test():
             for l in index_labels[0]:
                 if s == l:
                     index_list.append(s)
+        index_state = results[0]['s_labels'].cpu().detach().numpy()[index_list]
 
-        for i in index_list:
+        for k, (i, s) in enumerate(zip(index_list, index_state)):
             get_output = outputs['pred_logits'][:, i, 0]
+            get_output_state = outputs['pred_states'][:, i, s]
             get_box = results[0]['boxes'][i, :].cpu().detach().numpy()
 
             optimizer.zero_grad()
@@ -162,13 +164,29 @@ def detr_test():
             optimizer.zero_grad()
             grad = samples.tensors.grad.data.cpu()
 
+            get_output_state.backward(torch.ones_like(get_output_state), retain_graph=True)
+            grad_state = samples.tensors.grad.data.cpu()
+            if k == 0:
+                grad_new = grad
+                grad_state_new = grad_state
+            else:
+                grad_new = grad - grad_old
+                grad_state_new = grad_state - grad_state_old
+            grad_old = grad
+            grad_state_old = grad_state
+
             # visualize grad
-            grad = TF.resize(grad, [1024, 2048])
+            grad_new = TF.resize(grad_new, [1024, 2048])
             unloader = transforms.ToPILImage()
-            grad_image = grad.clone()  # clone the tensor
+            grad_image = grad_new.clone()  # clone the tensor
             grad_image = grad_image.squeeze(0)  # remove the fake batch dimension
             grad_image = unloader(grad_image)
             grad_image = np.array(grad_image)
+            grad_image = np.mean(grad_image, axis=-1)
+            zero_image = np.zeros((1024, 2048, 3))
+            zero_image[:, :, 0] = grad_image
+            grad_image = zero_image
+
             plt.figure()
             currentAxis = plt.gca()
             rect = patches.Rectangle((get_box[0], get_box[1]), get_box[2]-get_box[0], get_box[3]-get_box[1], linewidth=1, edgecolor='r', facecolor='none')
@@ -176,7 +194,33 @@ def detr_test():
             plt.imshow(grad_image)
             plt.show()
 
-            grad_real_image = np.array(grad_image)*0.5 + input_image
+            grad_state_new = TF.resize(grad_state_new, [1024, 2048])
+            unloader = transforms.ToPILImage()
+            grad_state_image = grad_state_new.clone()  # clone the tensor
+            grad_state_image = grad_state_image.squeeze(0)  # remove the fake batch dimension
+            grad_state_image = unloader(grad_state_image)
+            grad_state_image = np.array(grad_state_image)
+            grad_state_image = np.mean(grad_state_image, axis=-1)
+            zero_image = np.zeros((1024, 2048, 3))
+            zero_image[:, :, 2] = grad_state_image
+            grad_state_image = zero_image
+
+            plt.figure()
+            currentAxis = plt.gca()
+            rect = patches.Rectangle((get_box[0], get_box[1]), get_box[2]-get_box[0], get_box[3]-get_box[1], linewidth=1, edgecolor='r', facecolor='none')
+            currentAxis.add_patch(rect)
+            plt.imshow(grad_state_image)
+            plt.show()
+
+            image = grad_image + grad_state_image
+            plt.figure()
+            currentAxis = plt.gca()
+            rect = patches.Rectangle((get_box[0], get_box[1]), get_box[2]-get_box[0], get_box[3]-get_box[1], linewidth=1, edgecolor='r', facecolor='none')
+            currentAxis.add_patch(rect)
+            plt.imshow(image)
+            plt.show()
+
+            grad_real_image = np.array(image)*0.5 + input_image
             plt.figure()
             currentAxis = plt.gca()
             rect = patches.Rectangle((get_box[0], get_box[1]), get_box[2]-get_box[0], get_box[3]-get_box[1], linewidth=1, edgecolor='r', facecolor='none')

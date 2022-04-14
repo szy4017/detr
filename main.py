@@ -271,11 +271,11 @@ def main(rank, ws, args):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = '1'
+    os.environ["CUDA_VISIBLE_DEVICES"] = '4'
 
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
-    args.mode = 'eval'
+    # args.mode = 'eval'
     # for evaluation
     if args.mode == 'eval':
         # eval setting
@@ -318,8 +318,9 @@ if __name__ == '__main__':
         args.aux_loss = True
         args.train_mode = 'finetune'
         args.resume = './checkpoints/detr-r50-e632da11.pth'
+        args.resume = './results_pretrain_state_finetune_5/checkpoint.pth'
 
-        args.distributed_mode = True
+        args.distributed_mode = False
         if args.distributed_mode:
             args.world_size = 2
             mp.spawn(main, nprocs=args.world_size, args=(args.world_size, args))  # for distributed training
