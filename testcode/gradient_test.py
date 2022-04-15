@@ -145,7 +145,7 @@ def detr_test():
 
         orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)
         results = postprocessors['bbox'](outputs, orig_target_sizes)
-        index_scores = np.where(results[0]['scores'].cpu().detach().numpy() > 0.5)
+        index_scores = np.where(results[0]['scores'].cpu().detach().numpy() > 0.85)
         index_labels = np.where(results[0]['labels'].cpu().detach().numpy() == 0)
         index_list = list()
         for s in index_scores[0]:
@@ -153,81 +153,68 @@ def detr_test():
                 if s == l:
                     index_list.append(s)
         index_state = results[0]['s_labels'].cpu().detach().numpy()[index_list]
+        box_color = ['w', 'b', 'c']
 
-        for k, (i, s) in enumerate(zip(index_list, index_state)):
-            get_output = outputs['pred_logits'][:, i, 0]
-            get_output_state = outputs['pred_states'][:, i, s]
-            get_box = results[0]['boxes'][i, :].cpu().detach().numpy()
+        key_image = input("select this image, input Y or N\n")
+        if key_image == 'y':
 
-            optimizer.zero_grad()
-            get_output.backward(torch.ones_like(get_output), retain_graph=True)
-            optimizer.zero_grad()
-            grad = samples.tensors.grad.data.cpu()
+            key_index = 0
+            for k, (i, s) in enumerate(zip(index_list, index_state)):
+                get_output = outputs['pred_logits'][:, i, 0]
+                get_output_state = outputs['pred_states'][:, i, s]
+                get_box = results[0]['boxes'][i, :].cpu().detach().numpy()
 
-            get_output_state.backward(torch.ones_like(get_output_state), retain_graph=True)
-            grad_state = samples.tensors.grad.data.cpu()
-            if k == 0:
-                grad_new = grad
-                grad_state_new = grad_state
-            else:
-                grad_new = grad - grad_old
-                grad_state_new = grad_state - grad_state_old
-            grad_old = grad
-            grad_state_old = grad_state
+                plt.figure()
+                currentAxis = plt.gca()
+                rect = patches.Rectangle((get_box[0], get_box[1]), get_box[2] - get_box[0], get_box[3] - get_box[1],
+                                         linewidth=1, edgecolor=box_color[s], facecolor='none')
+                currentAxis.add_patch(rect)
+                plt.imshow(input_image)
+                plt.show()
 
-            # visualize grad
-            grad_new = TF.resize(grad_new, [1024, 2048])
-            unloader = transforms.ToPILImage()
-            grad_image = grad_new.clone()  # clone the tensor
-            grad_image = grad_image.squeeze(0)  # remove the fake batch dimension
-            grad_image = unloader(grad_image)
-            grad_image = np.array(grad_image)
-            grad_image = np.mean(grad_image, axis=-1)
-            zero_image = np.zeros((1024, 2048, 3))
-            zero_image[:, :, 0] = grad_image
-            grad_image = zero_image
+                key = input("select this object, input Y or N\n")
+                if key == 'y':
+                    get_output.backward(torch.ones_like(get_output), retain_graph=True)
+                    grad = samples.tensors.grad.data.cpu()
 
-            plt.figure()
-            currentAxis = plt.gca()
-            rect = patches.Rectangle((get_box[0], get_box[1]), get_box[2]-get_box[0], get_box[3]-get_box[1], linewidth=1, edgecolor='r', facecolor='none')
-            currentAxis.add_patch(rect)
-            plt.imshow(grad_image)
-            plt.show()
+                    get_output_state.backward(torch.ones_like(get_output_state), retain_graph=True)
+                    grad_state = samples.tensors.grad.data.cpu()
 
-            grad_state_new = TF.resize(grad_state_new, [1024, 2048])
-            unloader = transforms.ToPILImage()
-            grad_state_image = grad_state_new.clone()  # clone the tensor
-            grad_state_image = grad_state_image.squeeze(0)  # remove the fake batch dimension
-            grad_state_image = unloader(grad_state_image)
-            grad_state_image = np.array(grad_state_image)
-            grad_state_image = np.mean(grad_state_image, axis=-1)
-            zero_image = np.zeros((1024, 2048, 3))
-            zero_image[:, :, 2] = grad_state_image
-            grad_state_image = zero_image
+                    if key_index == 0:
+                        grad_new = grad
+                        grad_state_new = grad_state - grad
+                    else:
+                        grad_new = grad - grad_old
+                        grad_state_new = grad_state - grad_state_old - grad_new
+                    grad_old = grad_state
+                    grad_state_old = grad_state
+                    grad_image = draw_GradientNorm(grad_new, get_box, 0)
+                    grad_state_image = draw_GradientNorm(grad_state_new, get_box, 1)
 
-            plt.figure()
-            currentAxis = plt.gca()
-            rect = patches.Rectangle((get_box[0], get_box[1]), get_box[2]-get_box[0], get_box[3]-get_box[1], linewidth=1, edgecolor='r', facecolor='none')
-            currentAxis.add_patch(rect)
-            plt.imshow(grad_state_image)
-            plt.show()
+                    image = grad_image + grad_state_image
+                    plt.figure()
+                    currentAxis = plt.gca()
+                    rect = patches.Rectangle((get_box[0], get_box[1]), get_box[2] - get_box[0], get_box[3] - get_box[1],
+                                             linewidth=1, edgecolor=box_color[s], facecolor='none')
+                    currentAxis.add_patch(rect)
+                    plt.imshow(image)
+                    plt.show()
 
-            image = grad_image + grad_state_image
-            plt.figure()
-            currentAxis = plt.gca()
-            rect = patches.Rectangle((get_box[0], get_box[1]), get_box[2]-get_box[0], get_box[3]-get_box[1], linewidth=1, edgecolor='r', facecolor='none')
-            currentAxis.add_patch(rect)
-            plt.imshow(image)
-            plt.show()
+                    grad_real_image = np.array(image) * 0.5 + input_image
+                    plt.figure()
+                    currentAxis = plt.gca()
+                    rect = patches.Rectangle((get_box[0], get_box[1]), get_box[2] - get_box[0], get_box[3] - get_box[1],
+                                             linewidth=1, edgecolor=box_color[s], facecolor='none')
+                    currentAxis.add_patch(rect)
+                    plt.imshow(grad_real_image)
+                    plt.show()
 
-            grad_real_image = np.array(image)*0.5 + input_image
-            plt.figure()
-            currentAxis = plt.gca()
-            rect = patches.Rectangle((get_box[0], get_box[1]), get_box[2]-get_box[0], get_box[3]-get_box[1], linewidth=1, edgecolor='r', facecolor='none')
-            currentAxis.add_patch(rect)
-            plt.imshow(grad_real_image)
-            plt.show()
-            pass
+                    key_index = key_index + 1
+                else:
+                    continue
+        else:
+            continue
+
 
 
 
@@ -244,6 +231,31 @@ def unnormalize(img):
     plt.show()
 
     return img
+
+
+def draw_GradientNorm(grad, box, color_channel):
+    # visualize grad
+    resized_grad = TF.resize(grad, [1024, 2048])
+
+    unloader = transforms.ToPILImage()
+    grad_image = resized_grad.clone()  # clone the tensor
+    grad_image = grad_image.squeeze(0)  # remove the fake batch dimension
+    grad_image = unloader(grad_image)
+    grad_image = np.array(grad_image)
+    grad_image = np.mean(grad_image, axis=-1)
+    zero_image = np.zeros((1024, 2048, 3))
+    zero_image[:, :, color_channel] = grad_image
+    grad_image = zero_image
+
+    plt.figure()
+    currentAxis = plt.gca()
+    rect = patches.Rectangle((box[0], box[1]), box[2] - box[0], box[3] - box[1], linewidth=1,
+                             edgecolor='b', facecolor='none')
+    currentAxis.add_patch(rect)
+    plt.imshow(grad_image)
+    plt.show()
+
+    return grad_image
 
 
 if __name__ == '__main__':

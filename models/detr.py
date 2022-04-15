@@ -52,7 +52,9 @@ class DETR(nn.Module):
             self.class_embed = mlp_cls(output_dim=num_classes + 1)  # new FFN for class embedding
             self.intru_state_embed = mlp_sta(output_dim=num_states + 1)  # new FFN for state embedding
         self.bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3) ## 位置分类器
-        self.query_embed = nn.Embedding(num_queries, hidden_dim)
+        self.tgt_query_embed = nn.Embedding(num_queries, hidden_dim)    # target query embedding
+        if self.sta_query:
+            self.sta_query_embed = nn.Embedding(num_queries, hidden_dim)    # state query embedding
         self.input_proj = nn.Conv2d(backbone.num_channels, hidden_dim, kernel_size=1)
         self.backbone = backbone
         self.train_mode = train_mode
@@ -86,10 +88,12 @@ class DETR(nn.Module):
             src, mask = features[-1].decompose()
             assert mask is not None ## 这里的mask是针对encoder的
             if self.sta_query:
-                hs_tgt = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[0]
-                hs_sta = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[1]
+                query_embed_dict = {'tgt': self.tgt_query_embed.weight, 'sta': self.sta_query_embed.weight}
+                # hs_tgt = self.transformer(self.input_proj(src), mask, self.tgt_query_embed.weight, pos[-1])[0]
+                # hs_sta = self.transformer(self.input_proj(src), mask, self.sta_query_embed.weight, pos[-1])[1]
+                hs_tgt, hs_sta, memory = self.transformer(self.input_proj(src), mask, query_embed_dict, pos[-1])
             else:
-                hs = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[0]
+                hs, memory = self.transformer(self.input_proj(src), mask, self.tgt_query_embed.weight, pos[-1])
                 # hs[6, 2, 100, 256]->[decoder_layer, batch_size, query_num, feature_vector]
         elif self.train_mode == 'feature_base':
             # feature based
@@ -102,7 +106,12 @@ class DETR(nn.Module):
                 src, mask = features[-1].decompose()
                 assert mask is not None
                 # hs是transformer后提取出来的特征，shape为[6, 2, 100, 256]，分别表示decoder层数，batch大小，设定的目标数，特征向量维度
-                hs = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[0]
+                if self.sta_query:
+                    hs_tgt = self.transformer(self.input_proj(src), mask, self.tgt_query_embed.weight, pos[-1])[0]
+                    hs_sta = self.transformer(self.input_proj(src), mask, self.sta_query_embed.weight, pos[-1])[1]
+                else:
+                    hs = self.transformer(self.input_proj(src), mask, self.tgt_query_embed.weight, pos[-1])[0]
+                    # hs[6, 2, 100, 256]->[decoder_layer, batch_size, query_num, feature_vector]
 
         if self.sta_query:
             if self.ffn_model == 'old':

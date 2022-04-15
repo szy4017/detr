@@ -50,21 +50,27 @@ class Transformer(nn.Module):
         bs, c, h, w = src.shape
         src = src.flatten(2).permute(2, 0, 1)
         pos_embed = pos_embed.flatten(2).permute(2, 0, 1)
-        query_embed = query_embed.unsqueeze(1).repeat(1, bs, 1)
-        mask = mask.flatten(1)
+        if isinstance(query_embed, dict):
+            tgt_query_embed = query_embed['tgt'].unsqueeze(1).repeat(1, bs, 1)
+            sta_query_embed = query_embed['sta'].unsqueeze(1).repeat(1, bs, 1)
+            tgt = torch.zeros_like(tgt_query_embed)  # target query
+            sta = torch.zeros_like(sta_query_embed)
 
-        tgt = torch.zeros_like(query_embed) # target query
+        else:
+            query_embed = query_embed.unsqueeze(1).repeat(1, bs, 1)
+            tgt = torch.zeros_like(query_embed)  # target query
+
+        mask = mask.flatten(1)
         memory = self.encoder(src, src_key_padding_mask=mask, pos=pos_embed)
+
         ## 在decoder中，tgt的mask和key_padding_mask都为None，这里的mask都是针对encoder的
         if self.sta_query:
-            hs = self.decoder(tgt, memory, memory_key_padding_mask=mask,
-                              pos=pos_embed, query_pos=query_embed)
-            hs_tgt = hs['tgt'].transpose(1, 2)
-            hs_sta = hs['sta'].transpose(1, 2)
-            return hs_tgt, hs_sta, memory.permute(1, 2, 0).view(bs, c, h, w)
+            hs_tgt = self.decoder(tgt, memory, memory_key_padding_mask=mask, pos=pos_embed, query_pos=tgt_query_embed)
+            hs_sta = self.decoder(sta, memory, memory_key_padding_mask=mask, pos=pos_embed, query_pos=sta_query_embed)
+
+            return hs_tgt.transpose(1, 2), hs_sta.transpose(1, 2), memory.permute(1, 2, 0).view(bs, c, h, w)
         else:
-            hs = self.decoder(tgt, memory, memory_key_padding_mask=mask,
-                              pos=pos_embed, query_pos=query_embed)
+            hs = self.decoder(tgt, memory, memory_key_padding_mask=mask, pos=pos_embed, query_pos=query_embed)
             return hs.transpose(1, 2), memory.permute(1, 2, 0).view(bs, c, h, w)
 
 
@@ -103,73 +109,35 @@ class TransformerDecoder(nn.Module):
         self.sta_query = sta_query
 
     def forward(self, tgt, memory,
-                sta: Optional[Tensor] = None,
                 tgt_mask: Optional[Tensor] = None,
-                sta_mask: Optional[Tensor] = None,
                 memory_mask: Optional[Tensor] = None,
                 tgt_key_padding_mask: Optional[Tensor] = None,
-                sta_key_padding_mask: Optional[Tensor] = None,
                 memory_key_padding_mask: Optional[Tensor] = None,
                 pos: Optional[Tensor] = None,
                 query_pos: Optional[Tensor] = None):
-        if self.sta_query:
-            output = tgt
+        output = tgt
 
-            intermediate_tgt = []   ## 保存每层self attention输出的中间变量
-            intermediate_sta = []
+        intermediate = []
 
-            for layer in self.layers:
-                output = layer(output, memory,
-                               tgt_mask=tgt_mask,
-                               sta_mask=sta_mask,
-                               memory_mask=memory_mask,
-                               tgt_key_padding_mask=tgt_key_padding_mask,
-                               sta_key_padding_mask=sta_key_padding_mask,
-                               memory_key_padding_mask=memory_key_padding_mask,
-                               pos=pos, query_pos=query_pos)
-                output_tgt = output['tgt']
-                output_sta = output['sta']
-                if self.return_intermediate:
-                    intermediate_tgt.append(self.norm(output_tgt))
-                    intermediate_sta.append(self.norm(output_sta))
-
-            if self.norm is not None:
-                output_tgt = self.norm(output_tgt)
-                output_sta = self.norm(output_sta)
-                if self.return_intermediate:
-                    intermediate_tgt.pop()
-                    intermediate_tgt.append(output_tgt)
-                    intermediate_sta.pop()
-                    intermediate_sta.append(output_sta)
-
+        for layer in self.layers:
+            output = layer(output, memory, tgt_mask=tgt_mask,
+                           memory_mask=memory_mask,
+                           tgt_key_padding_mask=tgt_key_padding_mask,
+                           memory_key_padding_mask=memory_key_padding_mask,
+                           pos=pos, query_pos=query_pos)
             if self.return_intermediate:
-                return {'tgt': torch.stack(intermediate_tgt), 'sta': torch.stack(intermediate_sta)}
+                intermediate.append(self.norm(output))
 
-            return {'tgt': output_tgt.unsqueeze(0), 'sta': output_sta.unsqueeze(0)}
-        else:
-            output = tgt
-
-            intermediate = []
-
-            for layer in self.layers:
-                output = layer(output, memory, tgt_mask=tgt_mask,
-                               memory_mask=memory_mask,
-                               tgt_key_padding_mask=tgt_key_padding_mask,
-                               memory_key_padding_mask=memory_key_padding_mask,
-                               pos=pos, query_pos=query_pos)
-                if self.return_intermediate:
-                    intermediate.append(self.norm(output))
-
-            if self.norm is not None:
-                output = self.norm(output)
-                if self.return_intermediate:
-                    intermediate.pop()
-                    intermediate.append(output)
-
+        if self.norm is not None:
+            output = self.norm(output)
             if self.return_intermediate:
-                return torch.stack(intermediate)
+                intermediate.pop()
+                intermediate.append(output)
 
-            return output.unsqueeze(0)
+        if self.return_intermediate:
+            return torch.stack(intermediate)
+
+        return output.unsqueeze(0)
 
 
 class TransformerEncoderLayer(nn.Module):
@@ -297,6 +265,7 @@ class TransformerDecoderLayer(nn.Module):
         tgt = self.norm3(tgt)
         return tgt
 
+    # no use
     ## 增加state query
     def forward_post_state(self, sta, memory,
                            sta_mask: Optional[Tensor] = None,
@@ -346,33 +315,19 @@ class TransformerDecoderLayer(nn.Module):
 
     def forward(self, input, memory,
                 tgt_mask: Optional[Tensor] = None,
-                sta_mask: Optional[Tensor] = None,
                 memory_mask: Optional[Tensor] = None,
                 tgt_key_padding_mask: Optional[Tensor] = None,
-                sta_key_padding_mask: Optional[Tensor] = None,
                 memory_key_padding_mask: Optional[Tensor] = None,
                 pos: Optional[Tensor] = None,
                 query_pos: Optional[Tensor] = None):
-        if isinstance(input, dict):
-            tgt = input['tgt']
-            sta = input['sta']
-        else:
-            tgt = input
-            sta = input
+        tgt = input
 
         if self.normalize_before:
             return self.forward_pre(tgt, memory, tgt_mask, memory_mask,
                                     tgt_key_padding_mask, memory_key_padding_mask, pos, query_pos)
         else:
-            if self.sta_query:
-                tgt = self.forward_post(tgt, memory, tgt_mask, memory_mask,
-                                        tgt_key_padding_mask, memory_key_padding_mask, pos, query_pos)
-                sta = self.forward_post_state(sta, memory, sta_mask, memory_mask,
-                                              sta_key_padding_mask, memory_key_padding_mask, pos, query_pos)
-                return {'tgt': tgt, 'sta': sta}
-            else:
-                return self.forward_post(tgt, memory, tgt_mask, memory_mask,
-                                         tgt_key_padding_mask, memory_key_padding_mask, pos, query_pos)
+            return self.forward_post(tgt, memory, tgt_mask, memory_mask,
+                                     tgt_key_padding_mask, memory_key_padding_mask, pos, query_pos)
 
 
 def _get_clones(module, N):
