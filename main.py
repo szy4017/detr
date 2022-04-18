@@ -271,11 +271,11 @@ def main(rank, ws, args):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = '1'
+    os.environ["CUDA_VISIBLE_DEVICES"] = '3'
 
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
-    # args.mode = 'eval'
+    args.mode = 'eval'
     # for evaluation
     if args.mode == 'eval':
         # eval setting
@@ -294,7 +294,7 @@ if __name__ == '__main__':
         args.ffn_model = 'old'
         args.aux_loss = True
         args.train_mode = 'feature_base'
-        args.resume = './results_pretrain_state_finetune_6/checkpoint.pth'
+        args.resume = './results_pretrain_state_finetune_4/checkpoint.pth'
 
         args.distributed_mode = False
         main(None, None, args)
@@ -302,23 +302,23 @@ if __name__ == '__main__':
     # for training
     elif args.mode == 'train':
         # training setting
-        args.batch_size = 1
+        args.batch_size = 2
         args.epochs = 400
         args.dataset_file = 'intruscapes'
         # args.coco_path = '/home/szy/data/intruscapes' # for old server
         args.coco_path = '/data/szy4017/data/intruscapes'   # for new server
-        args.output_dir = './results_pretrain_state_finetune_6'
+        args.output_dir = './results_pretrain_state_finetune_4'
         if args.output_dir:
             Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
         # model setting
-        args.sta_query = True
+        args.sta_query = False
         args.num_queries = 50
-        args.ffn_model = 'new'
+        args.ffn_model = 'old'
         args.aux_loss = True
         args.train_mode = 'finetune'
-        args.resume = './checkpoints/detr-r50-e632da11.pth'
-        # args.resume = './results_pretrain_state_finetune_5/checkpoint.pth'
+        # args.resume = './checkpoints/detr-r50-e632da11.pth'
+        args.resume = './results_pretrain_state_finetune_4/checkpoint.pth'
 
         args.distributed_mode = False
         if args.distributed_mode:

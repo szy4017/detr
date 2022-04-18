@@ -170,7 +170,7 @@ class TransformerEncoderLayer(nn.Module):
         q = k = self.with_pos_embed(src, pos)
         src2 = self.self_attn(q, k, value=src, attn_mask=src_mask,
                               key_padding_mask=src_key_padding_mask)[0]
-        # 查看attention权重
+        ## 查看attention权重
         #src2_, src2_weight = self.self_attn(q, k, value=src, attn_mask=src_mask,
                               #key_padding_mask=src_key_padding_mask)
         #weight = src2_weight[0, :, :].max(1)
