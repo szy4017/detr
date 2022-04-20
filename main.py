@@ -271,7 +271,7 @@ def main(rank, ws, args):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = '3,4'
+    os.environ["CUDA_VISIBLE_DEVICES"] = '4'
 
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
@@ -289,12 +289,12 @@ if __name__ == '__main__':
             Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
         # model setting
-        args.sta_query = False
+        args.sta_query = True
         args.num_queries = 50
         args.ffn_model = 'old'
         args.aux_loss = True
         args.train_mode = 'finetune'
-        args.resume = './results_pretrain_state_finetune_4/checkpoint.pth'
+        args.resume = './results_pretrain_state_finetune_3/checkpoint.pth'
 
         args.distributed_mode = False
         main(None, None, args)
@@ -302,17 +302,17 @@ if __name__ == '__main__':
     # for training
     elif args.mode == 'train':
         # training setting
-        args.batch_size = 2
+        args.batch_size = 1
         args.epochs = 400
         args.dataset_file = 'intruscapes'
         # args.coco_path = '/home/szy/data/intruscapes' # for old server
         args.coco_path = '/data/szy4017/data/intruscapes'   # for new server
-        args.output_dir = './results_pretrain_state_finetune_3'
+        args.output_dir = './results_pretrain_state_finetune_2'
         if args.output_dir:
             Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
         # model setting
-        args.sta_query = True
+        args.sta_query = False
         args.num_queries = 50
         args.ffn_model = 'old'
         args.aux_loss = True
@@ -320,7 +320,7 @@ if __name__ == '__main__':
         args.resume = './checkpoints/detr-r50-e632da11.pth'
         # args.resume = './results_pretrain_state_finetune_4/checkpoint.pth'
 
-        args.distributed_mode = True
+        args.distributed_mode = False
         if args.distributed_mode:
             args.world_size = 2
             mp.spawn(main, nprocs=args.world_size, args=(args.world_size, args))  # for distributed training

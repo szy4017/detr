@@ -28,11 +28,16 @@ class Transformer(nn.Module):
         encoder_norm = nn.LayerNorm(d_model) if normalize_before else None
         self.encoder = TransformerEncoder(encoder_layer, num_encoder_layers, encoder_norm)
 
-        decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward,
-                                                dropout, activation, normalize_before, sta_query)
-        decoder_norm = nn.LayerNorm(d_model)
-        self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm,
-                                          return_intermediate=return_intermediate_dec, sta_query=sta_query)
+        # decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward,
+        #                                         dropout, activation, normalize_before, sta_query)
+        # decoder_norm = nn.LayerNorm(d_model)
+        # self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm,
+        #                                   return_intermediate=return_intermediate_dec, sta_query=sta_query)
+        from .decoder_deformable import DeformableTransformerDecoderLayer, DeformableTransformerDecoder
+        decoder_layer = DeformableTransformerDecoderLayer(d_model, dim_feedforward,
+                                                          dropout, activation,
+                                                          4, nhead, 4)
+        self.decoder = DeformableTransformerDecoder(decoder_layer, num_decoder_layers, return_intermediate_dec)
 
         self._reset_parameters()
 

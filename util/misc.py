@@ -517,3 +517,10 @@ def _output_size(dim, input, size, scale_factor):
     return [
         int(math.floor(input.size(i + 2) * scale_factors[i])) for i in range(dim)
     ]
+
+
+def inverse_sigmoid(x, eps=1e-5):
+    x = x.clamp(min=0, max=1)
+    x1 = x.clamp(min=eps)
+    x2 = (1 - x).clamp(min=eps)
+    return torch.log(x1/x2)
