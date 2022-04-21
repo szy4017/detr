@@ -45,10 +45,21 @@ class Transformer(nn.Module):
         self.nhead = nhead
         self.sta_query = sta_query
 
+        self.reference_points = nn.Linear(d_model, 2)   # get reference points for deformable decoder
+
     def _reset_parameters(self):
         for p in self.parameters():
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
+
+    def get_valid_ratio(self, mask):
+        _, H, W = mask.shape
+        valid_H = torch.sum(~mask[:, :, 0], 1)
+        valid_W = torch.sum(~mask[:, 0, :], 1)
+        valid_ratio_h = valid_H.float() / H
+        valid_ratio_w = valid_W.float() / W
+        valid_ratio = torch.stack([valid_ratio_w, valid_ratio_h], -1)
+        return valid_ratio
 
     def forward(self, src, mask, query_embed, pos_embed):
         # flatten NxCxHxW to HWxNxC
@@ -65,18 +76,27 @@ class Transformer(nn.Module):
             query_embed = query_embed.unsqueeze(1).repeat(1, bs, 1)
             tgt = torch.zeros_like(query_embed)  # target query
 
-        mask = mask.flatten(1)
-        memory = self.encoder(src, src_key_padding_mask=mask, pos=pos_embed)
+        mask_flatten = mask.flatten(1)
+        memory = self.encoder(src, src_key_padding_mask=mask_flatten, pos=pos_embed)
 
         ## 在decoder中，tgt的mask和key_padding_mask都为None，这里的mask都是针对encoder的
         if self.sta_query:
-            hs_tgt = self.decoder(tgt, memory, memory_key_padding_mask=mask, pos=pos_embed, query_pos=tgt_query_embed)
-            hs_sta = self.decoder(sta, memory, memory_key_padding_mask=mask, pos=pos_embed, query_pos=sta_query_embed)
+            hs_tgt = self.decoder(tgt, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed, query_pos=tgt_query_embed)
+            hs_sta = self.decoder(sta, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed, query_pos=sta_query_embed)
 
             return hs_tgt.transpose(1, 2), hs_sta.transpose(1, 2), memory.permute(1, 2, 0).view(bs, c, h, w)
         else:
-            hs = self.decoder(tgt, memory, memory_key_padding_mask=mask, pos=pos_embed, query_pos=query_embed)
-            return hs.transpose(1, 2), memory.permute(1, 2, 0).view(bs, c, h, w)
+            # hs = self.decoder(tgt, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed, query_pos=query_embed)
+
+            # deformable decoder
+            reference_points = self.reference_points(query_embed).sigmoid()
+            spatial_shapes = torch.as_tensor([(h, w)], dtype=torch.long, device=src.device)
+            level_start_index = torch.cat((spatial_shapes.new_zeros((1,)), spatial_shapes.prod(1).cumsum(0)[:-1]))
+            valid_ratios = torch.stack([self.get_valid_ratio(m) for m in mask.unsqueeze(0)], 1)
+            hs, inter_references = self.decoder(tgt.permute(1, 0, 2), reference_points, memory.permute(1, 0, 2), spatial_shapes, level_start_index,
+                                                valid_ratios, query_embed.permute(1, 0, 2), mask_flatten)
+
+            return hs, memory.permute(1, 2, 0).view(bs, c, h, w)
 
 
 class TransformerEncoder(nn.Module):
