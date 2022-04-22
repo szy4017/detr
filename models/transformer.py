@@ -89,10 +89,10 @@ class Transformer(nn.Module):
             # hs = self.decoder(tgt, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed, query_pos=query_embed)
 
             # deformable decoder
-            reference_points = self.reference_points(query_embed).sigmoid()
+            reference_points = self.reference_points(query_embed.transpose(1, 0)).sigmoid()
             spatial_shapes = torch.as_tensor([(h, w)], dtype=torch.long, device=src.device)
             level_start_index = torch.cat((spatial_shapes.new_zeros((1,)), spatial_shapes.prod(1).cumsum(0)[:-1]))
-            valid_ratios = torch.stack([self.get_valid_ratio(m) for m in mask.unsqueeze(0)], 1)
+            valid_ratios = torch.stack([self.get_valid_ratio(mask)], 1)
             hs, inter_references = self.decoder(tgt.permute(1, 0, 2), reference_points, memory.permute(1, 0, 2), spatial_shapes, level_start_index,
                                                 valid_ratios, query_embed.permute(1, 0, 2), mask_flatten)
 
