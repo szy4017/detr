@@ -199,9 +199,9 @@ class SetCriterion(nn.Module):
         losses = {'loss_ce': loss_ce}
 
         ## 查看src_states结果
-        # save = src_logits[0]
-        # idx_min = torch.argmin(save, dim=1)
-        # idx_max = torch.argmax(save, dim=1)
+        save = src_logits[0]
+        idx_min = torch.argmin(save, dim=1)
+        idx_max = torch.argmax(save, dim=1)
 
         if log:
             # TODO this should probably be a separate loss, not hacked in this one here
@@ -227,9 +227,9 @@ class SetCriterion(nn.Module):
         losses = {'loss_se': loss_se}
 
         ## 查看src_states结果
-        # save = src_states[0]
-        # idx_min = torch.argmin(save, dim=1)
-        # idx_max = torch.argmax(save, dim=1)
+        save = src_states[0]
+        idx_min = torch.argmin(save, dim=1)
+        idx_max = torch.argmax(save, dim=1)
 
         if log:
             # TODO this should probably be a separate loss, not hacked in this one here
@@ -390,8 +390,8 @@ class PostProcess(nn.Module):
         s_scores, s_labels = s_prob[..., :-1].max(-1)   # 同理得到目标的入侵状态类别和置信度得分
 
         # 保存原始输出为txt
-        # save_logits = prob.cpu().numpy().reshape(-1, prob.shape[-1])
-        # save_states = s_prob.cpu().numpy().reshape(-1, s_prob.shape[-1])
+        save_logits = prob.cpu().numpy().reshape(-1, prob.shape[-1])
+        save_states = s_prob.cpu().numpy().reshape(-1, s_prob.shape[-1])
 
         # convert to [x0, y0, x1, y1] format
         boxes = box_ops.box_cxcywh_to_xyxy(out_bbox)
