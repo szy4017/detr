@@ -28,16 +28,11 @@ class Transformer(nn.Module):
         encoder_norm = nn.LayerNorm(d_model) if normalize_before else None
         self.encoder = TransformerEncoder(encoder_layer, num_encoder_layers, encoder_norm)
 
-        # decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward,
-        #                                         dropout, activation, normalize_before, sta_query)
-        # decoder_norm = nn.LayerNorm(d_model)
-        # self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm,
-        #                                   return_intermediate=return_intermediate_dec, sta_query=sta_query)
-        from .decoder_deformable import DeformableTransformerDecoderLayer, DeformableTransformerDecoder
-        decoder_layer = DeformableTransformerDecoderLayer(d_model, dim_feedforward,
-                                                          dropout, activation,
-                                                          4, nhead, 4)
-        self.decoder = DeformableTransformerDecoder(decoder_layer, num_decoder_layers, return_intermediate_dec)
+        decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward,
+                                                dropout, activation, normalize_before, sta_query)
+        decoder_norm = nn.LayerNorm(d_model)
+        self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm,
+                                          return_intermediate=return_intermediate_dec, sta_query=sta_query)
 
         self._reset_parameters()
 
@@ -45,58 +40,32 @@ class Transformer(nn.Module):
         self.nhead = nhead
         self.sta_query = sta_query
 
-        self.reference_points = nn.Linear(d_model, 2)   # get reference points for deformable decoder
-
     def _reset_parameters(self):
         for p in self.parameters():
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
-
-    def get_valid_ratio(self, mask):
-        _, H, W = mask.shape
-        valid_H = torch.sum(~mask[:, :, 0], 1)
-        valid_W = torch.sum(~mask[:, 0, :], 1)
-        valid_ratio_h = valid_H.float() / H
-        valid_ratio_w = valid_W.float() / W
-        valid_ratio = torch.stack([valid_ratio_w, valid_ratio_h], -1)
-        return valid_ratio
 
     def forward(self, src, mask, query_embed, pos_embed):
         # flatten NxCxHxW to HWxNxC
         bs, c, h, w = src.shape
         src = src.flatten(2).permute(2, 0, 1)
         pos_embed = pos_embed.flatten(2).permute(2, 0, 1)
-        if isinstance(query_embed, dict):
-            tgt_query_embed = query_embed['tgt'].unsqueeze(1).repeat(1, bs, 1)
-            sta_query_embed = query_embed['sta'].unsqueeze(1).repeat(1, bs, 1)
-            tgt = torch.zeros_like(tgt_query_embed)  # target query
-            sta = torch.zeros_like(sta_query_embed)
+        query_embed = query_embed.unsqueeze(1).repeat(1, bs, 1)
+        mask = mask.flatten(1)
 
-        else:
-            query_embed = query_embed.unsqueeze(1).repeat(1, bs, 1)
-            tgt = torch.zeros_like(query_embed)  # target query
-
-        mask_flatten = mask.flatten(1)
-        memory = self.encoder(src, src_key_padding_mask=mask_flatten, pos=pos_embed)
-
+        tgt = torch.zeros_like(query_embed) # target query
+        memory = self.encoder(src, src_key_padding_mask=mask, pos=pos_embed)
         ## 在decoder中，tgt的mask和key_padding_mask都为None，这里的mask都是针对encoder的
         if self.sta_query:
-            hs_tgt = self.decoder(tgt, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed, query_pos=tgt_query_embed)
-            hs_sta = self.decoder(sta, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed, query_pos=sta_query_embed)
-
-            return hs_tgt.transpose(1, 2), hs_sta.transpose(1, 2), memory.permute(1, 2, 0).view(bs, c, h, w)
+            hs = self.decoder(tgt, memory, memory_key_padding_mask=mask,
+                              pos=pos_embed, query_pos=query_embed)
+            hs_tgt = hs['tgt'].transpose(1, 2)
+            hs_sta = hs['sta'].transpose(1, 2)
+            return hs_tgt, hs_sta, memory.permute(1, 2, 0).view(bs, c, h, w)
         else:
-            # hs = self.decoder(tgt, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed, query_pos=query_embed)
-
-            # deformable decoder
-            reference_points = self.reference_points(query_embed.transpose(1, 0)).sigmoid()
-            spatial_shapes = torch.as_tensor([(h, w)], dtype=torch.long, device=src.device)
-            level_start_index = torch.cat((spatial_shapes.new_zeros((1,)), spatial_shapes.prod(1).cumsum(0)[:-1]))
-            valid_ratios = torch.stack([self.get_valid_ratio(mask)], 1)
-            hs, inter_references = self.decoder(tgt.permute(1, 0, 2), reference_points, memory.permute(1, 0, 2), spatial_shapes, level_start_index,
-                                                valid_ratios, query_embed.permute(1, 0, 2), mask_flatten)
-
-            return hs, memory.permute(1, 2, 0).view(bs, c, h, w)
+            hs = self.decoder(tgt, memory, memory_key_padding_mask=mask,
+                              pos=pos_embed, query_pos=query_embed)
+            return hs.transpose(1, 2), memory.permute(1, 2, 0).view(bs, c, h, w)
 
 
 class TransformerEncoder(nn.Module):
@@ -134,35 +103,73 @@ class TransformerDecoder(nn.Module):
         self.sta_query = sta_query
 
     def forward(self, tgt, memory,
+                sta: Optional[Tensor] = None,
                 tgt_mask: Optional[Tensor] = None,
+                sta_mask: Optional[Tensor] = None,
                 memory_mask: Optional[Tensor] = None,
                 tgt_key_padding_mask: Optional[Tensor] = None,
+                sta_key_padding_mask: Optional[Tensor] = None,
                 memory_key_padding_mask: Optional[Tensor] = None,
                 pos: Optional[Tensor] = None,
                 query_pos: Optional[Tensor] = None):
-        output = tgt
+        if self.sta_query:
+            output = tgt
 
-        intermediate = []
+            intermediate_tgt = []   ## 保存每层self attention输出的中间变量
+            intermediate_sta = []
 
-        for layer in self.layers:
-            output = layer(output, memory, tgt_mask=tgt_mask,
-                           memory_mask=memory_mask,
-                           tgt_key_padding_mask=tgt_key_padding_mask,
-                           memory_key_padding_mask=memory_key_padding_mask,
-                           pos=pos, query_pos=query_pos)
+            for layer in self.layers:
+                output = layer(output, memory,
+                               tgt_mask=tgt_mask,
+                               sta_mask=sta_mask,
+                               memory_mask=memory_mask,
+                               tgt_key_padding_mask=tgt_key_padding_mask,
+                               sta_key_padding_mask=sta_key_padding_mask,
+                               memory_key_padding_mask=memory_key_padding_mask,
+                               pos=pos, query_pos=query_pos)
+                output_tgt = output['tgt']
+                output_sta = output['sta']
+                if self.return_intermediate:
+                    intermediate_tgt.append(self.norm(output_tgt))
+                    intermediate_sta.append(self.norm(output_sta))
+
+            if self.norm is not None:
+                output_tgt = self.norm(output_tgt)
+                output_sta = self.norm(output_sta)
+                if self.return_intermediate:
+                    intermediate_tgt.pop()
+                    intermediate_tgt.append(output_tgt)
+                    intermediate_sta.pop()
+                    intermediate_sta.append(output_sta)
+
             if self.return_intermediate:
-                intermediate.append(self.norm(output))
+                return {'tgt': torch.stack(intermediate_tgt), 'sta': torch.stack(intermediate_sta)}
 
-        if self.norm is not None:
-            output = self.norm(output)
+            return {'tgt': output_tgt.unsqueeze(0), 'sta': output_sta.unsqueeze(0)}
+        else:
+            output = tgt
+
+            intermediate = []
+
+            for layer in self.layers:
+                output = layer(output, memory, tgt_mask=tgt_mask,
+                               memory_mask=memory_mask,
+                               tgt_key_padding_mask=tgt_key_padding_mask,
+                               memory_key_padding_mask=memory_key_padding_mask,
+                               pos=pos, query_pos=query_pos)
+                if self.return_intermediate:
+                    intermediate.append(self.norm(output))
+
+            if self.norm is not None:
+                output = self.norm(output)
+                if self.return_intermediate:
+                    intermediate.pop()
+                    intermediate.append(output)
+
             if self.return_intermediate:
-                intermediate.pop()
-                intermediate.append(output)
+                return torch.stack(intermediate)
 
-        if self.return_intermediate:
-            return torch.stack(intermediate)
-
-        return output.unsqueeze(0)
+            return output.unsqueeze(0)
 
 
 class TransformerEncoderLayer(nn.Module):
@@ -195,7 +202,7 @@ class TransformerEncoderLayer(nn.Module):
         q = k = self.with_pos_embed(src, pos)
         src2 = self.self_attn(q, k, value=src, attn_mask=src_mask,
                               key_padding_mask=src_key_padding_mask)[0]
-        ## 查看attention权重
+        # 查看attention权重
         #src2_, src2_weight = self.self_attn(q, k, value=src, attn_mask=src_mask,
                               #key_padding_mask=src_key_padding_mask)
         #weight = src2_weight[0, :, :].max(1)
@@ -290,7 +297,6 @@ class TransformerDecoderLayer(nn.Module):
         tgt = self.norm3(tgt)
         return tgt
 
-    # no use
     ## 增加state query
     def forward_post_state(self, sta, memory,
                            sta_mask: Optional[Tensor] = None,
@@ -340,19 +346,33 @@ class TransformerDecoderLayer(nn.Module):
 
     def forward(self, input, memory,
                 tgt_mask: Optional[Tensor] = None,
+                sta_mask: Optional[Tensor] = None,
                 memory_mask: Optional[Tensor] = None,
                 tgt_key_padding_mask: Optional[Tensor] = None,
+                sta_key_padding_mask: Optional[Tensor] = None,
                 memory_key_padding_mask: Optional[Tensor] = None,
                 pos: Optional[Tensor] = None,
                 query_pos: Optional[Tensor] = None):
-        tgt = input
+        if isinstance(input, dict):
+            tgt = input['tgt']
+            sta = input['sta']
+        else:
+            tgt = input
+            sta = input
 
         if self.normalize_before:
             return self.forward_pre(tgt, memory, tgt_mask, memory_mask,
                                     tgt_key_padding_mask, memory_key_padding_mask, pos, query_pos)
         else:
-            return self.forward_post(tgt, memory, tgt_mask, memory_mask,
-                                     tgt_key_padding_mask, memory_key_padding_mask, pos, query_pos)
+            if self.sta_query:
+                tgt = self.forward_post(tgt, memory, tgt_mask, memory_mask,
+                                        tgt_key_padding_mask, memory_key_padding_mask, pos, query_pos)
+                sta = self.forward_post_state(sta, memory, sta_mask, memory_mask,
+                                              sta_key_padding_mask, memory_key_padding_mask, pos, query_pos)
+                return {'tgt': tgt, 'sta': sta}
+            else:
+                return self.forward_post(tgt, memory, tgt_mask, memory_mask,
+                                         tgt_key_padding_mask, memory_key_padding_mask, pos, query_pos)
 
 
 def _get_clones(module, N):
