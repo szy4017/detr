@@ -271,7 +271,7 @@ def main(rank, ws, args):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+    os.environ["CUDA_VISIBLE_DEVICES"] = '5'
 
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
@@ -317,8 +317,8 @@ if __name__ == '__main__':
         args.ffn_model = 'old'
         args.aux_loss = True
         args.train_mode = 'finetune'
-        args.resume = './checkpoints/detr-r50-e632da11.pth'
-        # args.resume = './results_pretrain_state_finetune_9/checkpoint.pth'
+        # args.resume = './checkpoints/detr-r50-e632da11.pth'
+        args.resume = './results_pretrain_state_finetune_2/checkpoint.pth'
 
         args.distributed_mode = False
         if args.distributed_mode:
