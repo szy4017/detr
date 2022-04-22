@@ -143,7 +143,7 @@ def main(rank, ws, args):
     model_without_ddp = model
     if args.distributed:
         args.gpu = rank
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=True)
         model_without_ddp = model.module
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print('number of params:', n_parameters)
@@ -271,7 +271,7 @@ def main(rank, ws, args):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = '5'
+    os.environ["CUDA_VISIBLE_DEVICES"] = '1'
 
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
@@ -289,12 +289,12 @@ if __name__ == '__main__':
             Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
         # model setting
-        args.sta_query = False
+        args.sta_query = True
         args.num_queries = 50
         args.ffn_model = 'old'
         args.aux_loss = True
-        args.train_mode = 'feature_base'
-        args.resume = './results_pretrain_state_finetune_6/checkpoint.pth'
+        args.train_mode = 'finetune'
+        args.resume = './results_pretrain_state_finetune_3/checkpoint.pth'
 
         args.distributed_mode = False
         main(None, None, args)
@@ -302,23 +302,23 @@ if __name__ == '__main__':
     # for training
     elif args.mode == 'train':
         # training setting
-        args.batch_size = 2
+        args.batch_size = 1
         args.epochs = 400
         args.dataset_file = 'intruscapes'
-        # args.coco_path = '/home/szy/data/intruscapes' # for old server
-        args.coco_path = '/data/szy4017/data/intruscapes'   # for new server
-        args.output_dir = './results_pretrain_state_finetune_5'
+        args.coco_path = '/home/szy/data/intruscapes' # for old server
+        # args.coco_path = '/data/szy4017/data/intruscapes'   # for new server
+        args.output_dir = './results_pretrain_state_finetune_2'
         if args.output_dir:
             Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
         # model setting
-        args.sta_query = True
+        args.sta_query = False
         args.num_queries = 50
         args.ffn_model = 'old'
         args.aux_loss = True
         args.train_mode = 'finetune'
         # args.resume = './checkpoints/detr-r50-e632da11.pth'
-        # args.resume = './results_pretrain_state_finetune_5/checkpoint.pth'
+        # args.resume = './results_pretrain_state_finetune_9/checkpoint.pth'
 
         args.distributed_mode = False
         if args.distributed_mode:
