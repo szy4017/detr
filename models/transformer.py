@@ -28,16 +28,18 @@ class Transformer(nn.Module):
         encoder_norm = nn.LayerNorm(d_model) if normalize_before else None
         self.encoder = TransformerEncoder(encoder_layer, num_encoder_layers, encoder_norm)
 
-        # decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward,
-        #                                         dropout, activation, normalize_before, sta_query)
-        # decoder_norm = nn.LayerNorm(d_model)
-        # self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm,
-        #                                   return_intermediate=return_intermediate_dec, sta_query=sta_query)
-        from .decoder_deformable import DeformableTransformerDecoderLayer, DeformableTransformerDecoder
-        decoder_layer = DeformableTransformerDecoderLayer(d_model, dim_feedforward,
-                                                          dropout, activation,
-                                                          4, nhead, 4)
-        self.decoder = DeformableTransformerDecoder(decoder_layer, num_decoder_layers, return_intermediate_dec)
+        decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward,
+                                                dropout, activation, normalize_before, sta_query)
+        decoder_norm = nn.LayerNorm(d_model)
+        self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm,
+                                          return_intermediate=return_intermediate_dec, sta_query=sta_query)
+
+        # for deformable decoder
+        # from .decoder_deformable import DeformableTransformerDecoderLayer, DeformableTransformerDecoder
+        # decoder_layer = DeformableTransformerDecoderLayer(d_model, dim_feedforward,
+        #                                                   dropout, activation,
+        #                                                   4, nhead, 4)
+        # self.decoder = DeformableTransformerDecoder(decoder_layer, num_decoder_layers, return_intermediate_dec)
 
         self._reset_parameters()
 
@@ -67,8 +69,8 @@ class Transformer(nn.Module):
         src = src.flatten(2).permute(2, 0, 1)
         pos_embed = pos_embed.flatten(2).permute(2, 0, 1)
         if isinstance(query_embed, dict):
-            tgt_query_embed = query_embed['tgt'].unsqueeze(1).repeat(1, bs, 1)
-            sta_query_embed = query_embed['sta'].unsqueeze(1).repeat(1, bs, 1)
+            tgt_query_embed = query_embed['tgt'].weight.unsqueeze(1).repeat(1, bs, 1).to(src.device)
+            sta_query_embed = query_embed['sta'].weight.unsqueeze(1).repeat(1, bs, 1).to(src.device)
             tgt = torch.zeros_like(tgt_query_embed)  # target query
             sta = torch.zeros_like(sta_query_embed)
 
@@ -82,11 +84,12 @@ class Transformer(nn.Module):
         ## 在decoder中，tgt的mask和key_padding_mask都为None，这里的mask都是针对encoder的
         if self.sta_query:
             hs_tgt = self.decoder(tgt, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed, query_pos=tgt_query_embed)
-            hs_sta = self.decoder(sta, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed, query_pos=sta_query_embed)
+            # hs_sta = self.decoder(sta, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed, query_pos=sta_query_embed)
+            hs_sta = self.decoder(sta, src, memory_key_padding_mask=mask_flatten, pos=pos_embed, query_pos=sta_query_embed) # state query in backbone features
 
             return hs_tgt.transpose(1, 2), hs_sta.transpose(1, 2), memory.permute(1, 2, 0).view(bs, c, h, w)
         else:
-            # hs = self.decoder(tgt, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed, query_pos=query_embed)
+            hs = self.decoder(tgt, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed, query_pos=query_embed)
 
             # deformable decoder
             reference_points = self.reference_points(query_embed.transpose(1, 0)).sigmoid()

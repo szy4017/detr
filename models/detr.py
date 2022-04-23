@@ -52,7 +52,10 @@ class DETR(nn.Module):
             self.class_embed = mlp_cls(output_dim=num_classes + 1)  # new FFN for class embedding
             self.intru_state_embed = mlp_sta(output_dim=num_states + 1)  # new FFN for state embedding
         self.bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3) ## 位置分类器
-        self.query_embed = nn.Embedding(num_queries, hidden_dim)
+        if self.sta_query:
+            self.query_embed = {'tgt': nn.Embedding(num_queries, hidden_dim), 'sta': nn.Embedding(num_queries, hidden_dim)}
+        else:
+            self.query_embed = nn.Embedding(num_queries, hidden_dim)
         self.input_proj = nn.Conv2d(backbone.num_channels, hidden_dim, kernel_size=1)
         self.backbone = backbone
         self.train_mode = train_mode
@@ -86,8 +89,7 @@ class DETR(nn.Module):
             src, mask = features[-1].decompose()
             assert mask is not None ## 这里的mask是针对encoder的
             if self.sta_query:
-                hs_tgt = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[0]
-                hs_sta = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[1]
+                hs_tgt, hs_sta, _ = self.transformer(self.input_proj(src), mask, self.query_embed, pos[-1])
             else:
                 hs = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[0]
                 # hs[6, 2, 100, 256]->[decoder_layer, batch_size, query_num, feature_vector]
