@@ -52,11 +52,7 @@ class DETR(nn.Module):
             self.class_embed = mlp_cls(output_dim=num_classes + 1)  # new FFN for class embedding
             self.intru_state_embed = mlp_sta(output_dim=num_states + 1)  # new FFN for state embedding
         self.bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3) ## 位置分类器
-        if self.sta_query:
-            self.sta_query_embed = nn.Embedding(num_queries, hidden_dim)    # state query embedding
-            self.tgt_query_embed = nn.Embedding(num_queries, hidden_dim)  # target query embedding
-        else:
-            self.query_embed = nn.Embedding(num_queries, hidden_dim)  # target query embedding
+        self.query_embed = nn.Embedding(num_queries, hidden_dim)
         self.input_proj = nn.Conv2d(backbone.num_channels, hidden_dim, kernel_size=1)
         self.backbone = backbone
         self.train_mode = train_mode
@@ -90,12 +86,10 @@ class DETR(nn.Module):
             src, mask = features[-1].decompose()
             assert mask is not None ## 这里的mask是针对encoder的
             if self.sta_query:
-                query_embed_dict = {'tgt': self.tgt_query_embed.weight, 'sta': self.sta_query_embed.weight}
-                # hs_tgt = self.transformer(self.input_proj(src), mask, self.tgt_query_embed.weight, pos[-1])[0]
-                # hs_sta = self.transformer(self.input_proj(src), mask, self.sta_query_embed.weight, pos[-1])[1]
-                hs_tgt, hs_sta, memory = self.transformer(self.input_proj(src), mask, query_embed_dict, pos[-1])
+                hs_tgt = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[0]
+                hs_sta = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[1]
             else:
-                hs, memory = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])
+                hs = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[0]
                 # hs[6, 2, 100, 256]->[decoder_layer, batch_size, query_num, feature_vector]
         elif self.train_mode == 'feature_base':
             # feature based
@@ -108,12 +102,7 @@ class DETR(nn.Module):
                 src, mask = features[-1].decompose()
                 assert mask is not None
                 # hs是transformer后提取出来的特征，shape为[6, 2, 100, 256]，分别表示decoder层数，batch大小，设定的目标数，特征向量维度
-                if self.sta_query:
-                    hs_tgt = self.transformer(self.input_proj(src), mask, self.tgt_query_embed.weight, pos[-1])[0]
-                    hs_sta = self.transformer(self.input_proj(src), mask, self.sta_query_embed.weight, pos[-1])[1]
-                else:
-                    hs = self.transformer(self.input_proj(src), mask, self.tgt_query_embed.weight, pos[-1])[0]
-                    # hs[6, 2, 100, 256]->[decoder_layer, batch_size, query_num, feature_vector]
+                hs = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[0]
 
         if self.sta_query:
             if self.ffn_model == 'old':
@@ -201,9 +190,9 @@ class SetCriterion(nn.Module):
         losses = {'loss_ce': loss_ce}
 
         ## 查看src_states结果
-        # save = src_logits[0]
-        # idx_min = torch.argmin(save, dim=1)
-        # idx_max = torch.argmax(save, dim=1)
+        save = src_logits[0]
+        idx_min = torch.argmin(save, dim=1)
+        idx_max = torch.argmax(save, dim=1)
 
         if log:
             # TODO this should probably be a separate loss, not hacked in this one here
@@ -229,9 +218,9 @@ class SetCriterion(nn.Module):
         losses = {'loss_se': loss_se}
 
         ## 查看src_states结果
-        # save = src_states[0]
-        # idx_min = torch.argmin(save, dim=1)
-        # idx_max = torch.argmax(save, dim=1)
+        save = src_states[0]
+        idx_min = torch.argmin(save, dim=1)
+        idx_max = torch.argmax(save, dim=1)
 
         if log:
             # TODO this should probably be a separate loss, not hacked in this one here
@@ -392,8 +381,8 @@ class PostProcess(nn.Module):
         s_scores, s_labels = s_prob[..., :-1].max(-1)   # 同理得到目标的入侵状态类别和置信度得分
 
         # 保存原始输出为txt
-        # save_logits = prob.cpu().numpy().reshape(-1, prob.shape[-1])
-        # save_states = s_prob.cpu().numpy().reshape(-1, s_prob.shape[-1])
+        save_logits = prob.cpu().numpy().reshape(-1, prob.shape[-1])
+        save_states = s_prob.cpu().numpy().reshape(-1, s_prob.shape[-1])
 
         # convert to [x0, y0, x1, y1] format
         boxes = box_ops.box_cxcywh_to_xyxy(out_bbox)
