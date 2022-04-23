@@ -89,8 +89,8 @@ def detr_test():
     args.eval = True
     args.batch_size = 1
     args.dataset_file = 'intruscapes'
-    # args.coco_path = '/home/szy/data/intruscapes' # for old server
-    args.coco_path = '/data/szy4017/data/intruscapes'  # for new server
+    args.coco_path = '/home/szy/data/intruscapes' # for old server
+    # args.coco_path = '/data/szy4017/data/intruscapes'  # for new server
     args.output_dir = './results'
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)

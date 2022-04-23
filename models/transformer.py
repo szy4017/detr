@@ -28,16 +28,16 @@ class Transformer(nn.Module):
         encoder_norm = nn.LayerNorm(d_model) if normalize_before else None
         self.encoder = TransformerEncoder(encoder_layer, num_encoder_layers, encoder_norm)
 
-        # decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward,
-        #                                         dropout, activation, normalize_before, sta_query)
-        # decoder_norm = nn.LayerNorm(d_model)
-        # self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm,
-        #                                   return_intermediate=return_intermediate_dec, sta_query=sta_query)
-        from .decoder_deformable import DeformableTransformerDecoderLayer, DeformableTransformerDecoder
-        decoder_layer = DeformableTransformerDecoderLayer(d_model, dim_feedforward,
-                                                          dropout, activation,
-                                                          4, nhead, 4)
-        self.decoder = DeformableTransformerDecoder(decoder_layer, num_decoder_layers, return_intermediate_dec)
+        decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward,
+                                                dropout, activation, normalize_before, sta_query)
+        decoder_norm = nn.LayerNorm(d_model)
+        self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm,
+                                          return_intermediate=return_intermediate_dec, sta_query=sta_query)
+        # from .decoder_deformable import DeformableTransformerDecoderLayer, DeformableTransformerDecoder
+        # decoder_layer = DeformableTransformerDecoderLayer(d_model, dim_feedforward,
+        #                                                   dropout, activation,
+        #                                                   4, nhead, 4)
+        # self.decoder = DeformableTransformerDecoder(decoder_layer, num_decoder_layers, return_intermediate_dec)
 
         self._reset_parameters()
 
@@ -71,7 +71,8 @@ class Transformer(nn.Module):
         ## 在decoder中，tgt的mask和key_padding_mask都为None，这里的mask都是针对encoder的
         if self.sta_query:
             hs_tgt = self.decoder(tgt, memory, memory_key_padding_mask=mask, pos=pos_embed, query_pos=tgt_query_embed)
-            hs_sta = self.decoder(sta, memory, memory_key_padding_mask=mask, pos=pos_embed, query_pos=sta_query_embed)
+            # hs_sta = self.decoder(sta, memory, memory_key_padding_mask=mask, pos=pos_embed, query_pos=sta_query_embed)
+            hs_sta = self.decoder(sta, src, memory_key_padding_mask=mask, pos=pos_embed, query_pos=sta_query_embed)
 
             return hs_tgt.transpose(1, 2), hs_sta.transpose(1, 2), memory.permute(1, 2, 0).view(bs, c, h, w)
         else:
@@ -175,13 +176,25 @@ class TransformerEncoderLayer(nn.Module):
         q = k = self.with_pos_embed(src, pos)
         src2 = self.self_attn(q, k, value=src, attn_mask=src_mask,
                               key_padding_mask=src_key_padding_mask)[0]
-        ## 查看attention权重
-        #src2_, src2_weight = self.self_attn(q, k, value=src, attn_mask=src_mask,
-                              #key_padding_mask=src_key_padding_mask)
-        #weight = src2_weight[0, :, :].max(1)
-        #import numpy as np
-        #torch.set_printoptions(threshold=np.inf)
-        #print(weight)
+        # 查看attention权重
+        src2_, src2_weight = self.self_attn(q, k, value=src, attn_mask=src_mask,
+                              key_padding_mask=src_key_padding_mask)
+        # weight = src2_weight[0, :, :].max(1)
+        weight = torch.mean(src2_weight, dim=1)
+        weight_reshaped = torch.reshape(weight, (1, 1, 42, 21))
+        weight_reshaped_scaled = nn.functional.interpolate(weight_reshaped, size=(1024, 2048), mode='bilinear', align_corners=False)
+        from torchvision import transforms
+        import numpy as np
+        from matplotlib import pyplot as plt
+        unloader = transforms.ToPILImage()
+        weight_image = unloader(weight_reshaped_scaled.squeeze().cpu())
+        weight_image = np.array(weight_image)
+        plt.figure()
+        plt.imshow(weight_image)
+        plt.show()
+        # torch.set_printoptions(threshold=np.inf)
+        # print(weight)
+
         src = src + self.dropout1(src2)
         src = self.norm1(src)
         src2 = self.linear2(self.dropout(self.activation(self.linear1(src))))

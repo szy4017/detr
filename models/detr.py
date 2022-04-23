@@ -52,9 +52,11 @@ class DETR(nn.Module):
             self.class_embed = mlp_cls(output_dim=num_classes + 1)  # new FFN for class embedding
             self.intru_state_embed = mlp_sta(output_dim=num_states + 1)  # new FFN for state embedding
         self.bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3) ## 位置分类器
-        self.tgt_query_embed = nn.Embedding(num_queries, hidden_dim)    # target query embedding
         if self.sta_query:
             self.sta_query_embed = nn.Embedding(num_queries, hidden_dim)    # state query embedding
+            self.tgt_query_embed = nn.Embedding(num_queries, hidden_dim)  # target query embedding
+        else:
+            self.query_embed = nn.Embedding(num_queries, hidden_dim)  # target query embedding
         self.input_proj = nn.Conv2d(backbone.num_channels, hidden_dim, kernel_size=1)
         self.backbone = backbone
         self.train_mode = train_mode
@@ -93,7 +95,7 @@ class DETR(nn.Module):
                 # hs_sta = self.transformer(self.input_proj(src), mask, self.sta_query_embed.weight, pos[-1])[1]
                 hs_tgt, hs_sta, memory = self.transformer(self.input_proj(src), mask, query_embed_dict, pos[-1])
             else:
-                hs, memory = self.transformer(self.input_proj(src), mask, self.tgt_query_embed.weight, pos[-1])
+                hs, memory = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])
                 # hs[6, 2, 100, 256]->[decoder_layer, batch_size, query_num, feature_vector]
         elif self.train_mode == 'feature_base':
             # feature based
