@@ -35,11 +35,11 @@ class Transformer(nn.Module):
                                           return_intermediate=return_intermediate_dec, sta_query=sta_query)
 
         # for deformable decoder
-        # from .decoder_deformable import DeformableTransformerDecoderLayer, DeformableTransformerDecoder
-        # decoder_layer = DeformableTransformerDecoderLayer(d_model, dim_feedforward,
-        #                                                   dropout, activation,
-        #                                                   4, nhead, 4)
-        # self.decoder = DeformableTransformerDecoder(decoder_layer, num_decoder_layers, return_intermediate_dec)
+        from .decoder_deformable import DeformableTransformerDecoderLayer, DeformableTransformerDecoder
+        sta_decoder_layer = DeformableTransformerDecoderLayer(d_model, dim_feedforward,
+                                                          dropout, activation,
+                                                          4, nhead, 4)
+        self.sta_decoder = DeformableTransformerDecoder(sta_decoder_layer, num_decoder_layers, return_intermediate_dec)
 
         self._reset_parameters()
 
@@ -47,7 +47,7 @@ class Transformer(nn.Module):
         self.nhead = nhead
         self.sta_query = sta_query
 
-        # self.reference_points = nn.Linear(d_model, 2)   # get reference points for deformable decoder
+        self.reference_points = nn.Linear(d_model, 2)   # get reference points for deformable decoder
 
     def _reset_parameters(self):
         for p in self.parameters():
@@ -85,7 +85,16 @@ class Transformer(nn.Module):
         if self.sta_query:
             hs_tgt = self.decoder(tgt, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed, query_pos=tgt_query_embed)
             # hs_sta = self.decoder(sta, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed, query_pos=sta_query_embed)
-            hs_sta = self.decoder(sta, src, memory_key_padding_mask=mask_flatten, pos=pos_embed, query_pos=sta_query_embed) # state query in backbone features
+            # hs_sta = self.decoder(sta, src, memory_key_padding_mask=mask_flatten, pos=pos_embed, query_pos=sta_query_embed) # state query in backbone features
+
+            # deformable decoder
+            reference_points = self.reference_points(sta_query_embed.transpose(1, 0)).sigmoid()
+            spatial_shapes = torch.as_tensor([(h, w)], dtype=torch.long, device=src.device)
+            level_start_index = torch.cat((spatial_shapes.new_zeros((1,)), spatial_shapes.prod(1).cumsum(0)[:-1]))
+            valid_ratios = torch.stack([self.get_valid_ratio(mask)], 1)
+            hs_sta, inter_references = self.sta_decoder(tgt.permute(1, 0, 2), reference_points, memory.permute(1, 0, 2), spatial_shapes, level_start_index,
+                                                valid_ratios, sta_query_embed.permute(1, 0, 2), mask_flatten)
+            hs_sta = hs_sta.transpose(1, 2)
 
             return hs_tgt.transpose(1, 2), hs_sta.transpose(1, 2), memory.permute(1, 2, 0).view(bs, c, h, w)
         else:
