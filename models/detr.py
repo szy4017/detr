@@ -54,6 +54,8 @@ class DETR(nn.Module):
         self.bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3) ## 位置分类器
         if self.sta_query:
             self.query_embed = {'tgt': nn.Embedding(num_queries, hidden_dim), 'sta': nn.Embedding(num_queries, hidden_dim)}
+            # self.tgt_query_embed = nn.Embedding(num_queries, hidden_dim)    # for results_pretrain_state_finetune_3/checkpoint.pth
+            # self.sta_query_embed = nn.Embedding(num_queries, hidden_dim)
         else:
             self.query_embed = nn.Embedding(num_queries, hidden_dim)
         self.input_proj = nn.Conv2d(backbone.num_channels, hidden_dim, kernel_size=1)
@@ -89,6 +91,8 @@ class DETR(nn.Module):
             src, mask = features[-1].decompose()
             assert mask is not None ## 这里的mask是针对encoder的
             if self.sta_query:
+                # query_embed = {'tgt': self.tgt_query_embed, 'sta': self.sta_query_embed}    # for results_pretrain_state_finetune_3/checkpoint.pth
+                # hs_tgt, hs_sta, _ = self.transformer(self.input_proj(src), mask, query_embed, pos[-1])
                 hs_tgt, hs_sta, _ = self.transformer(self.input_proj(src), mask, self.query_embed, pos[-1])
             else:
                 hs = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])[0]
