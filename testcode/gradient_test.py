@@ -101,7 +101,7 @@ def detr_test():
     args.ffn_model = 'old'
     args.aux_loss = True
     args.train_mode = 'finetune'
-    args.resume = './results_pretrain_state_finetune_3/checkpoint.pth'
+    args.resume = './results_pretrain_state_finetune_1/checkpoint.pth'
 
     args.distributed_mode = False
 
@@ -111,7 +111,7 @@ def detr_test():
     from models import build_model
     model, criterion, postprocessors = build_model(args)
     model.to(device)
-    checkpoint = torch.load('../results_pretrain_state_finetune_3/checkpoint.pth', map_location='cpu')
+    checkpoint = torch.load('../results_pretrain_state_finetune_1/checkpoint.pth', map_location='cpu')
     model.load_state_dict(checkpoint['model'])
 
     # build dataset
@@ -137,8 +137,10 @@ def detr_test():
 
     # get grad
     for index, (samples, targets) in enumerate(data_loader_val):
-        if index != 4:
+        if not (index in [11, 43, 97]): ## baseline错分的案例
             continue
+        # if not (index in [4, 11, 16, 29, 41, 43, 44, 55, 56, 63, 66, 67, 75, 78, 81, 88, 91, 95, 97, 98, 114])   ## 典型案例
+        #     continue
 
         samples = samples.to(device)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
@@ -148,7 +150,7 @@ def detr_test():
 
         orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)
         results = postprocessors['bbox'](outputs, orig_target_sizes)
-        index_scores = np.where(results[0]['scores'].cpu().detach().numpy() > 0.85)
+        index_scores = np.where(results[0]['scores'].cpu().detach().numpy() > 0.10)
         index_labels = np.where(results[0]['labels'].cpu().detach().numpy() == 0)
         index_list = list()
         for s in index_scores[0]:
@@ -160,6 +162,7 @@ def detr_test():
 
         key_image = input("select this image, input Y or N\n")
         if key_image == 'y':
+            print('image index: {}\n'.format(index))
 
             key_index = 0
             for k, (i, s) in enumerate(zip(index_list, index_state)):
@@ -213,6 +216,8 @@ def detr_test():
                     plt.show()
 
                     key_index = key_index + 1
+                elif key == 'b':
+                    break
                 else:
                     continue
         else:
@@ -264,5 +269,5 @@ def draw_GradientNorm(grad, box, color_channel):
 if __name__ == '__main__':
     # cnn_test()
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = '4'
+    os.environ["CUDA_VISIBLE_DEVICES"] = '3'
     detr_test()

@@ -55,7 +55,7 @@ class DETR(nn.Module):
         if self.sta_query:
             self.query_embed = {'tgt': nn.Embedding(num_queries, hidden_dim), 'sta': nn.Embedding(num_queries, hidden_dim)}
             # self.tgt_query_embed = nn.Embedding(num_queries, hidden_dim)    # for results_pretrain_state_finetune_3/checkpoint.pth
-            # self.sta_query_embed = nn.Embedding(num_queries, hidden_dim)
+            # self.query_embed = nn.Embedding(num_queries, hidden_dim)  # for results_pretrain_state_finetune_5
         else:
             self.query_embed = nn.Embedding(num_queries, hidden_dim)
         self.input_proj = nn.Conv2d(backbone.num_channels, hidden_dim, kernel_size=1)
