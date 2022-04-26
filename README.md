@@ -110,6 +110,23 @@ path可以采用一个简单的卷积网络（类似BiSiNet中的SP）。当然�
 全局的特征，图像位置空间特性将变弱，而CNN backbone输出的特征图中仍保持了充分的图像空间特性，由于state query的目的是获取与目标相关的周围空间信息，如果设计
 state query是根据object query的结果来去从CNN backbone中获取空间特征是否更有利于state的预测？
 
+回答（1）（2）问题
+（1）对于所提出的降采样encoder方式进行了实验，由于没有预训练的帮助，from scratch的训练使得网络无法训练成功，不能判断这样的encoder结构设计是否有效。所以
+有必要进行在小数据上进行数据增强的自监督预训练来摆脱原有DETR框架的束缚，因为在都采用的是原有DETR预训练基础上的finetune无法对模型结构进行大的改动，同样
+在decoder中应用deformable decoder也是无法训练的。但是实验结果中发现，应用state query是可以训练的，并且state query分支的加入不仅可以提升state prediction
+性能，而且能够提升object prediction性能。
+（2）所描述的猜测是有预见性的，实验分析了不同state query的余弦相似度对比，发现使用相同embedding的object query和state query几乎是获取到的是相同的特征，使用
+不同的embedding在encoder memory特征中进行query获取的特征相似度也很高，而在backbone中进行state query，在memory中进行object query获取到的特征有比较大的区分度，
+并且从性能上看backbone state query取得了目前最佳的性能，可以确定在backbone中进行state query是比较好的选择。
+
+**20220426实验总结有感**
+1. 在模型框架的设计思路上有以下考量：我们任务重点在于state，对于object预测的设计不是创新点的所在，建议采用最基础的DETR decoder框架来实现，而state query decoder中，
+则可以参考一些高效的方法（例如deformable decoder的方式等），当然state特征和object特征的融合也是创新所在，或者说根据object来进行state query也是可行的方案。这样的
+方式有助于说明我们所提出的方法并不是因为其他因素而导致的性能提升，而是state设计所导致，并且在目前的实验中我们也发现了state query对于object是有增益的。当然，为了减少
+模型训练的花费，在encoder上可以引入更高效的框架（例如swin transformer），当然这是要在train from scratch的基础上进行的。同时train from scratch也可以有一些特殊性
+的设计，实现小数据的训练。总结而言，模型可以分为以下四个版本：base；base+swin；base+big data finetune；base+swin+big data finetune。这里需要注意的一点是，state
+query encoder要尽量做到轻量，小改进有大进展。
+
 ![Positional Encoding](.github/positional_encoding.PNG)
 
 **What it is**. Unlike traditional computer vision techniques, DETR approaches object detection as a direct set prediction problem. It consists of a set-based global loss, which forces unique predictions via bipartite matching, and a Transformer encoder-decoder architecture. 
