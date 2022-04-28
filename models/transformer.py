@@ -40,7 +40,7 @@ class Transformer(nn.Module):
         #                                                   dropout, activation,
         #                                                   4, nhead, 4)
         # self.sta_decoder = DeformableTransformerDecoder(sta_decoder_layer, num_decoder_layers, return_intermediate_dec)
-        # self.reference_points = nn.Linear(d_model, 2)  # get reference points for deformable decoder
+        self.reference_points = nn.Linear(d_model, 2)  # get reference points for deformable decoder
 
         self._reset_parameters()
 
@@ -90,16 +90,16 @@ class Transformer(nn.Module):
         ## 在decoder中，tgt的mask和key_padding_mask都为None，这里的mask都是针对encoder的
         if self.sta_query:
             hs_tgt = self.decoder(tgt, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed, query_pos=tgt_query_embed)
-            hs_sta = self.decoder(sta, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed, query_pos=sta_query_embed)
-            # hs_sta = self.decoder(sta, src, memory_key_padding_mask=mask_flatten, pos=pos_embed, query_pos=sta_query_embed) # state query in backbone features
+            # hs_sta = self.decoder(sta, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed, query_pos=sta_query_embed)
+            hs_sta = self.decoder(sta, src, memory_key_padding_mask=mask_flatten, pos=pos_embed, query_pos=sta_query_embed) # state query in backbone features
 
             # calculate cosine similarity between hs_tgt and hs_sta
-            hs_tgt_ = hs_tgt[-1, :, 0, :]
-            hs_sta_ = hs_sta[-1, :, 0, :]
-            cos_sim = nn.CosineSimilarity(dim=1, eps=1e-6)
-            sim = torch.mean(cos_sim(hs_tgt_, hs_sta_), dim=0, keepdim=True)
-            with open('/data/szy4017/code/detr/feature_similarity.txt', 'a+') as f:
-                f.write(str(sim.cpu().detach().numpy()[0]) + '\n')
+            # hs_tgt_ = hs_tgt[-1, :, 0, :]
+            # hs_sta_ = hs_sta[-1, :, 0, :]
+            # cos_sim = nn.CosineSimilarity(dim=1, eps=1e-6)
+            # sim = torch.mean(cos_sim(hs_tgt_, hs_sta_), dim=0, keepdim=True)
+            # with open('/data/szy4017/code/detr/feature_similarity.txt', 'a+') as f:
+            #     f.write(str(sim.cpu().detach().numpy()[0]) + '\n')
             # print('cosine similarity: \n', sim)
 
             # deformable decoder
@@ -127,7 +127,6 @@ class Transformer(nn.Module):
 
 
 class TransformerEncoder(nn.Module):
-
     def __init__(self, encoder_layer, num_layers, norm=None):
         super().__init__()
         self.layers = _get_clones(encoder_layer, num_layers)

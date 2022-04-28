@@ -277,7 +277,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
-    # args.mode = 'eval'
+    args.mode = 'eval'
     # for evaluation
     if args.mode == 'eval':
         # eval setting
@@ -292,11 +292,11 @@ if __name__ == '__main__':
 
         # model setting
         args.sta_query = False
-        args.num_queries = 20
+        args.num_queries = 50
         args.ffn_model = 'old'
         args.aux_loss = True
         args.train_mode = 'finetune'
-        args.resume = './results_pretrain_state_finetune_12/checkpoint.pth'
+        args.resume = './results_pretrain_state_finetune_9/checkpoint.pth'
 
         args.distributed_mode = False
         main(None, None, args)

@@ -47,7 +47,7 @@ class CocoEvaluator(object):
 
         for iou_type in self.iou_types:
             results = self.prepare(predictions, iou_type)   ## 得到COCO形式的results<dict>
-            # self.show_result(results)   # show the image results of class prediction and state prediction
+            self.show_result(results)   # show the image results of class prediction and state prediction
 
             # suppress pycocotools prints
             with open(os.devnull, 'w') as devnull:
@@ -93,11 +93,9 @@ class CocoEvaluator(object):
         anns_gt = coco.loadAnns(annIds_gt)
 
         # load image
-        root_path = '/home/szy/data/cityscape/leftImg8bit/val'
+        root_path = '/data/szy4017/data/intruscapes/images/val'
         file_name = img_info[0]['file_name']
-        city_name = file_name.split('_')[0]
-        imgPath = os.path.join(root_path, city_name)
-        imgPath = os.path.join(imgPath, file_name)
+        imgPath = os.path.join(root_path, file_name)
         print(imgPath)
         img = cv.imread(imgPath)
         img_rgb = bgr2rgb(img)
