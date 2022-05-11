@@ -30,8 +30,6 @@ def get_args_parser():
     parser.add_argument('--num_states', default=3, type=int)
     parser.add_argument('--mode', default='train', type=str,
                         help="The mode of model, train mode or eval mode")
-    parser.add_argument('--train_mode', default='finetune', type=str,
-                        help='the mode of model training')
     parser.add_argument('--distributed_mode', default=True, type=bool)
     parser.add_argument('--clip_max_norm', default=0.1, type=float,
                         help="gradient clipping max norm")
@@ -66,6 +64,10 @@ def get_args_parser():
     # set state query in transformer decoder
     parser.add_argument('--sta_query', action='store_true',
                         help="Add state query in transformer decoder")
+    parser.add_argument('--deformable_decoder', action='store_true',
+                        help="Use deformable attention in transformer decoder")
+    parser.add_argument('--sta_query_loc', default=None, type=str,
+                        help="set the location of state query")
     # set FFN model
     parser.add_argument('--ffn_model', default='old', type=str,
                         help="Model of prediction FFN")
@@ -277,52 +279,35 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
+
+    # training setting
+    args.batch_size = 4
+    args.epochs = 400
+    args.dataset_file = 'intruscapes'
+    # args.coco_path = '/home/szy/data/intruscapes' # for old server
+    args.coco_path = '/data/szy4017/data/intruscapes'  # for new server
+    args.output_dir = './results_repeat_baseline_1'
+    if args.output_dir:
+        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+
+    # model setting
+    args.sta_query = False
+    args.deformable_decoder = False
+    args.sta_query_loc = None
+    args.num_queries = 50
+    args.ffn_model = 'old'
+    args.aux_loss = True
+    args.resume = './checkpoints/detr-r50-e632da11.pth'
+
+    # train or eval
     args.mode = 'eval'
-    # for evaluation
     if args.mode == 'eval':
-        # eval setting
         args.eval = True
-        args.batch_size = 2
-        args.dataset_file = 'intruscapes'
-        # args.coco_path = '/home/szy/data/intruscapes' # for old server
-        args.coco_path = '/data/szy4017/data/intruscapes'   # for new server
-        args.output_dir = './results'
-        if args.output_dir:
-            Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-
-        # model setting
-        args.sta_query = False
-        args.num_queries = 50
-        args.ffn_model = 'old'
-        args.aux_loss = True
-        args.train_mode = 'finetune'
-        args.resume = './results_pretrain_state_finetune_9/checkpoint.pth'
-
+        args.resume = os.path.join(args.output_dir, 'checkpoint.pth')
         args.distributed_mode = False
         main(None, None, args)
-
-    # for training
-    elif args.mode == 'train':
-        # training setting
-        args.batch_size = 2
-        args.epochs = 400
-        args.dataset_file = 'intruscapes'
-        # args.coco_path = '/home/szy/data/intruscapes' # for old server
-        args.coco_path = '/data/szy4017/data/intruscapes'   # for new server
-        args.output_dir = './results_pretrain_state_finetune_12'
-        if args.output_dir:
-            Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-
-        # model setting
-        args.sta_query = False
-        args.num_queries = 20
-        args.ffn_model = 'old'
-        args.aux_loss = True
-        args.train_mode = 'finetune'
-        # args.resume = './checkpoints/detr-r50-e632da11.pth'
-        args.resume = './results_pretrain_state_finetune_12/checkpoint.pth'
-
-        args.distributed_mode = False
+    else:
+        # args.distributed_mode = False
         if args.distributed_mode:
             args.world_size = 2
             mp.spawn(main, nprocs=args.world_size, args=(args.world_size, args))  # for distributed training
