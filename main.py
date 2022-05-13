@@ -275,7 +275,8 @@ def main(rank, ws, args):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = '3'
+    os.environ["CUDA_VISIBLE_DEVICES"] = '4, 5'
+    # os.environ["CUDA_VISIBLE_DEVICES"] = '3'
 
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
@@ -286,12 +287,14 @@ if __name__ == '__main__':
     args.dataset_file = 'intruscapes'
     # args.coco_path = '/home/szy/data/intruscapes' # for old server
     args.coco_path = '/data/szy4017/data/intruscapes'  # for new server
-    args.output_dir = './results_repeat_baseline_1'
+    # args.output_dir = './results_repeat_baseline_1'
+    # args.output_dir = './results_repeat_ffm_1'
+    args.output_dir = './results_repeat_staquery_1'
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
     # model setting
-    args.sta_query = False
+    args.sta_query = True
     args.deformable_decoder = False
     args.sta_query_loc = None
     args.num_queries = 50
@@ -300,7 +303,7 @@ if __name__ == '__main__':
     args.resume = './checkpoints/detr-r50-e632da11.pth'
 
     # train or eval
-    args.mode = 'eval'
+    # args.mode = 'eval'
     if args.mode == 'eval':
         args.eval = True
         args.resume = os.path.join(args.output_dir, 'checkpoint.pth')

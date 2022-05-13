@@ -47,7 +47,7 @@ class CocoEvaluator(object):
 
         for iou_type in self.iou_types:
             results = self.prepare(predictions, iou_type)   ## 得到COCO形式的results<dict>
-            self.show_result(results)   # show the image results of class prediction and state prediction
+            # self.show_result(results, simple_type=True)   # show the image results of class prediction and state prediction
 
             # suppress pycocotools prints
             with open(os.devnull, 'w') as devnull:
@@ -68,7 +68,7 @@ class CocoEvaluator(object):
             pass
 
     # 显示预测结果
-    def show_result(self, results):
+    def show_result(self, results, simple_type=False):
         """
         可视化预测结果，包括class prediction和state prediction
 
@@ -108,7 +108,7 @@ class CocoEvaluator(object):
         plt.show()
         plt.title('State Prediction')
         plt.imshow(img_rgb)
-        cocoRes.showIntrusion(anns)
+        cocoRes.showIntrusion(anns, simple_type=simple_type)
         plt.savefig('./misc/sta_pred_{}.png'.format(img_info[0]['id']))
         plt.show()
         plt.title('Class Ground Truth')
@@ -118,7 +118,7 @@ class CocoEvaluator(object):
         plt.show()
         plt.title('State Ground Truth')
         plt.imshow(img_rgb)
-        coco.showIntrusion(anns_gt)
+        coco.showIntrusion(anns_gt, simple_type=simple_type)
         plt.savefig('./misc/sta_gt_{}.png'.format(img_info[0]['id']))
         plt.show()
 
