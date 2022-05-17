@@ -127,6 +127,9 @@ state query是根据object query的结果来去从CNN backbone中获取空间特
 的设计，实现小数据的训练。总结而言，模型可以分为以下四个版本：base；base+swin；base+big data finetune；base+swin+big data finetune。这里需要注意的一点是，state
 query encoder要尽量做到轻量，小改进有大进展。
 
+**20220429与郭树璇老师交流**
+1. 
+
 ![Positional Encoding](.github/positional_encoding.PNG)
 
 **What it is**. Unlike traditional computer vision techniques, DETR approaches object detection as a direct set prediction problem. It consists of a set-based global loss, which forces unique predictions via bipartite matching, and a Transformer encoder-decoder architecture. 

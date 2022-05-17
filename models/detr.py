@@ -42,15 +42,17 @@ class DETR(nn.Module):
         assert self.ffn_model in ['old', 'new']
         if self.ffn_model == 'old':
             self.class_embed = nn.Linear(hidden_dim, num_classes + 1)  ## 类别分类器
-            self.intru_state_embed = nn.Linear(hidden_dim, num_states + 1)  ## 入侵状态分类器
+            if self.sta_query:
+                self.intru_state_embed = nn.Linear(hidden_dim * 2, num_states + 1)  ## 入侵状态分类器
+            else:
+                self.intru_state_embed = nn.Linear(hidden_dim, num_states + 1)
         elif self.ffn_model == 'new':
             self.class_embed = mlp_cls(output_dim=num_classes + 1)  # new FFN for class embedding
             self.intru_state_embed = mlp_sta(output_dim=num_states + 1)  # new FFN for state embedding
         self.bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3) ## 位置分类器
+        self.tgt_query_embed = nn.Embedding(num_queries, hidden_dim)
         if self.sta_query:
-            self.query_embed = {'tgt': nn.Embedding(num_queries, hidden_dim), 'sta': nn.Embedding(num_queries, hidden_dim)}
-        else:
-            self.query_embed = {'tgt': nn.Embedding(num_queries, hidden_dim)}
+            self.sta_query_embed = nn.Embedding(num_queries, hidden_dim)
         self.input_proj = nn.Conv2d(backbone.num_channels, hidden_dim, kernel_size=1)
         self.backbone = backbone
         self.aux_loss = aux_loss
@@ -79,16 +81,19 @@ class DETR(nn.Module):
 
         src, mask = features[-1].decompose()
         assert mask is not None  ## 这里的mask是针对encoder的
+
         if self.sta_query:
-            hs_tgt, hs_sta, _ = self.transformer(self.input_proj(src), mask, self.query_embed, pos[-1])
+            query_embed = {'tgt': self.tgt_query_embed, 'sta': self.sta_query_embed}
+            hs_tgt, hs_sta, _ = self.transformer(self.input_proj(src), mask, query_embed, pos[-1])
         else:
-            hs_tgt, _ = self.transformer(self.input_proj(src), mask, self.query_embed, pos[-1])
+            query_embed = {'tgt': self.tgt_query_embed}
+            hs_tgt, _ = self.transformer(self.input_proj(src), mask, query_embed, pos[-1])
             # hs[6, 2, 100, 256]->[decoder_layer, batch_size, query_num, feature_vector]
 
         if self.sta_query:
             if self.ffn_model == 'old':
                 outputs_class = self.class_embed(hs_tgt)    # hs[6, 2, 100, 256]->outputs_class[6, 2, 100, 92]，分类目标的类别
-                outputs_intru_state = self.intru_state_embed(hs_sta)
+                outputs_intru_state = self.intru_state_embed(torch.cat((hs_tgt, hs_sta), -1))
             elif self.ffn_model == 'new':
                 feature_class, outputs_class = self.class_embed(hs_tgt)
                 outputs_intru_state = self.intru_state_embed(hs_sta, feature_class)

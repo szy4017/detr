@@ -33,7 +33,7 @@ class Transformer(nn.Module):
         self.deformable_decoder = deformable_decoder
         if self.deformable_decoder is not True:
             decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward,
-                                                    dropout, activation, normalize_before, sta_query)
+                                                    dropout, activation, normalize_before)
             decoder_norm = nn.LayerNorm(d_model)
             self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm,
                                               return_intermediate=return_intermediate_dec, sta_query=sta_query)
@@ -103,10 +103,10 @@ class Transformer(nn.Module):
             if self.sta_query:
                 if self.sta_query_loc == 'backbone':
                     hs_sta = self.decoder(sta, src, memory_key_padding_mask=mask_flatten, pos=pos_embed,
-                                        query_pos=sta_query_embed)    # state query in backbone features
+                                          query_pos=sta_query_embed)    # state query in backbone features
                 else:
                     hs_sta = self.decoder(sta, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed,
-                                      query_pos=sta_query_embed)    # state query in decoder features
+                                          query_pos=sta_query_embed)    # state query in decoder features
                 return hs_tgt.transpose(1, 2), hs_sta.transpose(1, 2), memory.permute(1, 2, 0).view(bs, c, h, w)
             else:
                 return hs_tgt.transpose(1, 2), memory.permute(1, 2, 0).view(bs, c, h, w)
@@ -259,7 +259,7 @@ class TransformerEncoderLayer(nn.Module):
 class TransformerDecoderLayer(nn.Module):
 
     def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1,
-                 activation="relu", normalize_before=False, sta_query=False):
+                 activation="relu", normalize_before=False):
         super().__init__()
         self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
         self.multihead_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
@@ -277,15 +277,16 @@ class TransformerDecoderLayer(nn.Module):
 
         self.activation = _get_activation_fn(activation)
         self.normalize_before = normalize_before
-        self.sta_query = sta_query
-        if self.sta_query:
-            # Self attention for state query
-            self.self_attn_sta = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
-            self.multihead_attn_sta = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
+
+        # self.sta_query = sta_query
+        # if self.sta_query:
+        #     Self attention for state query
+            # self.self_attn_sta = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
+            # self.multihead_attn_sta = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
             # Feedforward model for state query
-            self.linear1_sta = nn.Linear(d_model, dim_feedforward)
-            self.dropout_sta = nn.Dropout(dropout)
-            self.linear2_sta = nn.Linear(dim_feedforward, d_model)
+            # self.linear1_sta = nn.Linear(d_model, dim_feedforward)
+            # self.dropout_sta = nn.Dropout(dropout)
+            # self.linear2_sta = nn.Linear(dim_feedforward, d_model)
 
     def with_pos_embed(self, tensor, pos: Optional[Tensor]):
         return tensor if pos is None else tensor + pos
@@ -316,28 +317,28 @@ class TransformerDecoderLayer(nn.Module):
 
     # no use
     ## 增加state query
-    def forward_post_state(self, sta, memory,
-                           sta_mask: Optional[Tensor] = None,
-                           memory_mask: Optional[Tensor] = None,
-                           sta_key_padding_mask: Optional[Tensor] = None,
-                           memory_key_padding_mask: Optional[Tensor] = None,
-                           pos: Optional[Tensor] = None,
-                           query_pos: Optional[Tensor] = None):
-        q = k = self.with_pos_embed(sta, query_pos) ## 给state query添加位置编码
-        sta2 = self.self_attn_sta(q, k, value=sta, attn_mask=sta_mask,
-                              key_padding_mask=sta_key_padding_mask)[0] ## 进行一次self attention操作，得到输出sta2
-        sta = sta + self.dropout1(sta2) ## 对sta2进行drop out操作
-        sta = self.norm1(sta)   ## 归一化处理
-        sta2 = self.multihead_attn_sta(query=self.with_pos_embed(sta, query_pos),
-                                   key=self.with_pos_embed(memory, pos),
-                                   value=memory, attn_mask=memory_mask,
-                                   key_padding_mask=memory_key_padding_mask)[0] ## 再进行一次self attenrion操作，这里引入了memory变量，memory是decoder的输出，是编码的图像特征
-        sta = sta + self.dropout2(sta2) ## 对sta2进行drop out操作
-        sta = self.norm2(sta)   ## 归一化处理
-        sta2 = self.linear2_sta(self.dropout_sta(self.activation(self.linear1_sta(sta))))   ## 对sta进行线性层特征转换，feed forward model
-        sta = sta + self.dropout3(sta2) ## 对sta2进行drop out操作
-        sta = self.norm3(sta)   #¥ 归一化处理
-        return sta
+    # def forward_post_state(self, sta, memory,
+    #                        sta_mask: Optional[Tensor] = None,
+    #                        memory_mask: Optional[Tensor] = None,
+    #                        sta_key_padding_mask: Optional[Tensor] = None,
+    #                        memory_key_padding_mask: Optional[Tensor] = None,
+    #                        pos: Optional[Tensor] = None,
+    #                        query_pos: Optional[Tensor] = None):
+    #     q = k = self.with_pos_embed(sta, query_pos) ## 给state query添加位置编码
+    #     sta2 = self.self_attn_sta(q, k, value=sta, attn_mask=sta_mask,
+    #                           key_padding_mask=sta_key_padding_mask)[0] ## 进行一次self attention操作，得到输出sta2
+    #     sta = sta + self.dropout1(sta2) ## 对sta2进行drop out操作
+    #     sta = self.norm1(sta)   ## 归一化处理
+    #     sta2 = self.multihead_attn_sta(query=self.with_pos_embed(sta, query_pos),
+    #                                key=self.with_pos_embed(memory, pos),
+    #                                value=memory, attn_mask=memory_mask,
+    #                                key_padding_mask=memory_key_padding_mask)[0] ## 再进行一次self attenrion操作，这里引入了memory变量，memory是decoder的输出，是编码的图像特征
+    #     sta = sta + self.dropout2(sta2) ## 对sta2进行drop out操作
+    #     sta = self.norm2(sta)   ## 归一化处理
+    #     sta2 = self.linear2_sta(self.dropout_sta(self.activation(self.linear1_sta(sta))))   ## 对sta进行线性层特征转换，feed forward model
+    #     sta = sta + self.dropout3(sta2) ## 对sta2进行drop out操作
+    #     sta = self.norm3(sta)   #¥ 归一化处理
+    #     return sta
 
     def forward_pre(self, tgt, memory,
                     tgt_mask: Optional[Tensor] = None,
