@@ -219,6 +219,10 @@ def main(rank, ws, args):
                                               data_loader_val, base_ds, device, args.output_dir)
         if args.output_dir:
             utils.save_on_master(coco_evaluator.coco_eval["bbox"].eval, output_dir / "eval.pth")
+
+        # save the whole model
+        print('save the whole model...')
+        torch.save(model, './checkpoints/model.pth')
         return
 
     print("Start training")
@@ -302,9 +306,9 @@ if __name__ == '__main__':
     # args.resume = './results_repeat_staquery_inbackbone_1/checkpoint0399.pth'
 
     # train or eval
-    # args.mode = 'eval'
+    args.mode = 'eval'
     if args.mode == 'eval':
-        os.environ["CUDA_VISIBLE_DEVICES"] = '3'
+        os.environ["CUDA_VISIBLE_DEVICES"] = '1'
         args.eval = True
         args.resume = os.path.join(args.output_dir, 'checkpoint.pth')
         args.distributed_mode = False

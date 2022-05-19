@@ -1,4 +1,6 @@
 import torch
+import os
+from util.misc import nested_tensor_from_tensor_list
 
 def read_checkpoint():
     base_checkpoint_path = '/data/szy4017/code/detr/checkpoints/detr-r50-e632da11.pth'
@@ -59,5 +61,18 @@ def read_checkpoint():
             print('--------------')
 
 
+def read_model():
+    os.environ["CUDA_VISIBLE_DEVICES"] = '1'
+    device = torch.device('cuda')
+    model = torch.load('../checkpoints/model.pth')
+    model.to(device)
+    model.eval()
+    x = nested_tensor_from_tensor_list([torch.rand(3, 200, 200), torch.rand(3, 200, 250)])
+    x = x.to(device)
+    out = model(x)
+    pass
+
+
+
 if __name__ == '__main__':
-    read_checkpoint()
+    read_model()
