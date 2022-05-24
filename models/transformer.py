@@ -20,7 +20,7 @@ class Transformer(nn.Module):
     def __init__(self, d_model=512, nhead=8, num_encoder_layers=6,
                  num_decoder_layers=6, dim_feedforward=2048, dropout=0.1,
                  activation="relu", normalize_before=False,
-                 return_intermediate_dec=False, sta_query=False, deformable_decoder=False, sta_query_loc=None):
+                 return_intermediate_dec=False, sta_query=False, deformable_decoder=False, sta_query_loc=None, sta_mask=False):
         super().__init__()
 
         # for encoder
@@ -46,6 +46,9 @@ class Transformer(nn.Module):
             self.decoder = DeformableTransformerDecoder(decoder_layer, num_decoder_layers, return_intermediate_dec)
             self.reference_points = nn.Linear(d_model, 2)  # get reference points for deformable decoder
 
+        self.sta_mask = sta_mask
+        if self.sta_mask:
+            self.sta_mask_transform = nn.Linear(256, 882)
 
         self._reset_parameters()
 
@@ -68,6 +71,13 @@ class Transformer(nn.Module):
         valid_ratio = torch.stack([valid_ratio_w, valid_ratio_h], -1)
         return valid_ratio
 
+    def get_sta_mask(self, hs_tgt):
+        hs_tgt = hs_tgt[-1, :, :, :]
+        hs_tgt = hs_tgt.transpose(1, 0)
+        hs_tgt = torch.mean(hs_tgt, dim=1)
+        mask_flatten = self.sta_mask_transform(hs_tgt)
+        return mask_flatten
+
     def deformable_decoder_forward(self, query, mask, feature, query_embed):
         bs, c, h, w = feature.shape
         mask_flatten = mask.flatten(1)
@@ -75,11 +85,10 @@ class Transformer(nn.Module):
         spatial_shapes = torch.as_tensor([(h, w)], dtype=torch.long, device=feature.device)
         level_start_index = torch.cat((spatial_shapes.new_zeros((1,)), spatial_shapes.prod(1).cumsum(0)[:-1]))
         valid_ratios = torch.stack([self.get_valid_ratio(mask)], 1)
-        hs, inter_references = self.sta_decoder(query.permute(1, 0, 2), reference_points, feature.permute(1, 0, 2),
+        hs, inter_references = self.decoder(query.permute(1, 0, 2), reference_points, feature.permute(1, 0, 2),
                                                     spatial_shapes, level_start_index,
                                                     valid_ratios, query_embed.permute(1, 0, 2), mask_flatten)
         hs = hs.transpose(1, 2)
-
         return hs.transpose(1, 2)
 
     def forward(self, src, mask, query_embed, pos_embed):
@@ -102,8 +111,13 @@ class Transformer(nn.Module):
 
             if self.sta_query:
                 if self.sta_query_loc == 'backbone':
-                    hs_sta = self.decoder(sta, src, memory_key_padding_mask=mask_flatten, pos=pos_embed,
-                                          query_pos=sta_query_embed)    # state query in backbone features
+                    if self.sta_mask:
+                        sta_mask_flatten = self.get_sta_mask(hs_tgt)
+                        hs_sta = self.decoder(sta, src, memory_key_padding_mask=mask_flatten, pos=pos_embed,
+                                            query_pos=sta_query_embed)    # state query in backbone features
+                    else:
+                        hs_sta = self.decoder(sta, src, memory_key_padding_mask=mask_flatten, pos=pos_embed,
+                                            query_pos=sta_query_embed)    # state query in backbone features
                 else:
                     hs_sta = self.decoder(sta, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed,
                                           query_pos=sta_query_embed)    # state query in decoder features
@@ -396,7 +410,8 @@ def build_transformer(args):
         return_intermediate_dec=True,
         sta_query=args.sta_query,
         deformable_decoder=args.deformable_decoder,
-        sta_query_loc=args.sta_query_loc
+        sta_query_loc=args.sta_query_loc,
+        sta_mask=args.sta_mask
     )
 
 

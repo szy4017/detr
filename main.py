@@ -64,6 +64,8 @@ def get_args_parser():
     # set state query in transformer decoder
     parser.add_argument('--sta_query', action='store_true',
                         help="Add state query in transformer decoder")
+    parser.add_argument('--sta_mask', default=False, type=bool,
+                        help="Adaptive mask for state query")
     parser.add_argument('--deformable_decoder', action='store_true',
                         help="Use deformable attention in transformer decoder")
     parser.add_argument('--sta_query_loc', default=None, type=str,
@@ -291,7 +293,7 @@ if __name__ == '__main__':
     # args.output_dir = './results_repeat_baseline_1'
     # args.output_dir = './results_repeat_ffm_1'
     # args.output_dir = './results_repeat_staquery_1'
-    args.output_dir = './results_repeat_staquery_ffm_inbackbone_1'
+    args.output_dir = './results_repeat_staquery_mask_ffm_inbackbone_1'
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -299,6 +301,7 @@ if __name__ == '__main__':
     args.sta_query = True
     args.deformable_decoder = False
     args.sta_query_loc = 'backbone'
+    args.sta_mask = True
     args.num_queries = 50
     args.ffn_model = 'new'
     args.aux_loss = True
@@ -306,7 +309,7 @@ if __name__ == '__main__':
     # args.resume = './results_repeat_staquery_inbackbone_1/checkpoint0399.pth'
 
     # train or eval
-    args.mode = 'eval'
+    # args.mode = 'eval'
     if args.mode == 'eval':
         os.environ["CUDA_VISIBLE_DEVICES"] = '1'
         args.eval = True
