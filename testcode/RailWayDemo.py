@@ -3,6 +3,10 @@ import os
 import cv2
 import numpy as np
 import torchvision.transforms.functional as F
+import cv2
+from PIL import Image
+from matplotlib import pyplot as plt
+import matplotlib.patches as patches
 
 from util.misc import nested_tensor_from_tensor_list
 from models.detr import PostProcess
@@ -37,6 +41,32 @@ def data_transform(frame):
     return img
 
 
+def build_dataset():
+    cap = cv2.VideoCapture('../demo_1.mp4')
+
+    f = 0
+    while (cap.isOpened()):
+        ret, frame = cap.read()
+        f = f + 1
+
+        if f % 10 == 0:
+            cv2.imshow('frame', frame)
+            cv2.waitKey(0)
+
+
+def show_results(frame, scores, labels, s_labels, boxes):
+    plt.rcParams['figure.figsize'] = (15.0, 8.0)
+    plt.figure()
+    plt.imshow(frame)
+    currentAxis = plt.gca()
+
+    for score, label, s_label, box in zip(scores, labels, s_labels, boxes):
+        rect_box = patches.Rectangle((box[0], box[1]), box[2] - box[0], box[3] - box[1], linewidth=2, edgecolor='r', facecolor='none')
+        currentAxis.add_patch(rect_box)
+
+    plt.show()
+
+
 def demo():
     os.environ["CUDA_VISIBLE_DEVICES"] = '1'
     device = torch.device('cuda')
@@ -59,8 +89,23 @@ def demo():
         x = x.to(device)
         output = model(x)
         results = postprocess(output, size)
+        scores = results[0]['scores'].cpu().numpy()
+        labels = results[0]['labels'].cpu().numpy()
+        s_labels = results[0]['s_labels'].cpu().numpy()
+        boxes = results[0]['boxes'].cpu().numpy()
+        save = np.where(scores > 0.5, True, False)
+
+        scores = scores[save]
+        labels = labels[save]
+        s_labels = s_labels[save]
+        boxes = boxes[save]
+
+        show_results(frame, scores, labels, s_labels, boxes)
+
     pass
 
 
 if __name__ == '__main__':
-    demo()
+    # demo()
+
+    build_dataset()
