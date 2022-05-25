@@ -290,6 +290,7 @@ if __name__ == '__main__':
     args.dataset_file = 'intruscapes'
     # args.coco_path = '/home/szy/data/intruscapes' # for old server
     args.coco_path = '/data/szy4017/data/intruscapes'  # for new server
+    # args.coco_path = '/data/szy4017/data/railway'   # for railway dataset
     # args.output_dir = './results_repeat_baseline_1'
     # args.output_dir = './results_repeat_ffm_1'
     # args.output_dir = './results_repeat_staquery_1'
@@ -318,7 +319,7 @@ if __name__ == '__main__':
         main(None, None, args)
     else:
         # args.distributed_mode = False
-        os.environ["CUDA_VISIBLE_DEVICES"] = '0, 1'
+        os.environ["CUDA_VISIBLE_DEVICES"] = '2, 3'
         if args.distributed_mode:
             args.world_size = 2
             mp.spawn(main, nprocs=args.world_size, args=(args.world_size, args))  # for distributed training

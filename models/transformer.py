@@ -48,7 +48,7 @@ class Transformer(nn.Module):
 
         self.sta_mask = sta_mask
         if self.sta_mask:
-            self.sta_mask_transform = nn.Linear(256, 882)
+            self.sta_mask_transform = state_mask_embed()
 
         self._reset_parameters()
 
@@ -71,11 +71,14 @@ class Transformer(nn.Module):
         valid_ratio = torch.stack([valid_ratio_w, valid_ratio_h], -1)
         return valid_ratio
 
-    def get_sta_mask(self, hs_tgt):
+    def get_sta_mask(self, hs_tgt, h, w):
         hs_tgt = hs_tgt[-1, :, :, :]
         hs_tgt = hs_tgt.transpose(1, 0)
-        hs_tgt = torch.mean(hs_tgt, dim=1)
-        mask_flatten = self.sta_mask_transform(hs_tgt)
+        hs_tgt = torch.reshape(hs_tgt, (4, 5, 10, -1)).permute(0, 3, 1, 2)
+        mask_feature = nn.functional.interpolate(hs_tgt, size=(h, w), mode='nearest', align_corners=None)
+        mask_feature = self.sta_mask_transform(mask_feature)
+        mask = mask_feature[:, 0, :, :] < mask_feature[:, 1, :, :]
+        mask_flatten = mask.flatten(1)
         return mask_flatten
 
     def deformable_decoder_forward(self, query, mask, feature, query_embed):
@@ -112,8 +115,8 @@ class Transformer(nn.Module):
             if self.sta_query:
                 if self.sta_query_loc == 'backbone':
                     if self.sta_mask:
-                        sta_mask_flatten = self.get_sta_mask(hs_tgt)
-                        hs_sta = self.decoder(sta, src, memory_key_padding_mask=mask_flatten, pos=pos_embed,
+                        sta_mask_flatten = self.get_sta_mask(hs_tgt, h, w)
+                        hs_sta = self.decoder(sta, src, memory_key_padding_mask=sta_mask_flatten, pos=pos_embed,
                                             query_pos=sta_query_embed)    # state query in backbone features
                     else:
                         hs_sta = self.decoder(sta, src, memory_key_padding_mask=mask_flatten, pos=pos_embed,
@@ -392,6 +395,29 @@ class TransformerDecoderLayer(nn.Module):
         else:
             return self.forward_post(tgt, memory, tgt_mask, memory_mask,
                                      tgt_key_padding_mask, memory_key_padding_mask, pos, query_pos)
+
+
+class state_mask_embed(nn.Module):
+    """ A simple multi-layer perceptron for class classification."""
+
+    def __init__(self, output_dim=2):
+        super().__init__()
+        self.conv1 = nn.Conv2d(256, 128, (3, 3), 1, 1)
+        self.bn1 = nn.BatchNorm2d(128)
+        self.conv2 = nn.Conv2d(128, 64, (3, 3), 1, 1)
+        self.bn2 = nn.BatchNorm2d(64)
+        self.conv3 = nn.Conv2d(64, 2, (3, 3), 1, 1)
+        self.bn3 = nn.BatchNorm2d(2)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = F.relu(self.bn1(x))
+        x = self.conv2(x)
+        x = F.relu(self.bn2(x))
+        x = self.conv3(x)
+        x = F.relu(self.bn3(x))
+        out = torch.softmax(x, dim=1)
+        return out
 
 
 def _get_clones(module, N):
