@@ -286,15 +286,15 @@ if __name__ == '__main__':
 
     # training setting
     args.batch_size = 4
-    args.epochs = 400
+    args.epochs = 600
     args.dataset_file = 'intruscapes'
     # args.coco_path = '/home/szy/data/intruscapes' # for old server
-    args.coco_path = '/data/szy4017/data/intruscapes'  # for new server
-    # args.coco_path = '/data/szy4017/data/railway'   # for railway dataset
+    # args.coco_path = '/data/szy4017/data/intruscapes'  # for new server
+    args.coco_path = '/data/szy4017/data/railway'   # for railway dataset
     # args.output_dir = './results_repeat_baseline_1'
     # args.output_dir = './results_repeat_ffm_1'
     # args.output_dir = './results_repeat_staquery_1'
-    args.output_dir = './results_repeat_staquery_mask_ffm_inbackbone_1'
+    args.output_dir = './results_railway'
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -302,17 +302,17 @@ if __name__ == '__main__':
     args.sta_query = True
     args.deformable_decoder = False
     args.sta_query_loc = 'backbone'
-    args.sta_mask = True
+    # args.sta_mask = True
     args.num_queries = 50
     args.ffn_model = 'new'
     args.aux_loss = True
-    args.resume = './checkpoints/detr-r50-e632da11.pth'
-    # args.resume = './results_repeat_staquery_inbackbone_1/checkpoint0399.pth'
+    # args.resume = './checkpoints/detr-r50-e632da11.pth'
+    args.resume = './results_repeat_staquery_ffm_inbackbone_1/checkpoint.pth'
 
     # train or eval
     # args.mode = 'eval'
     if args.mode == 'eval':
-        os.environ["CUDA_VISIBLE_DEVICES"] = '1'
+        os.environ["CUDA_VISIBLE_DEVICES"] = '2'
         args.eval = True
         args.resume = os.path.join(args.output_dir, 'checkpoint.pth')
         args.distributed_mode = False
