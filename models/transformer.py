@@ -13,6 +13,7 @@ from typing import Optional, List
 import torch
 import torch.nn.functional as F
 from torch import nn, Tensor
+import random
 
 
 class Transformer(nn.Module):
@@ -72,9 +73,10 @@ class Transformer(nn.Module):
         return valid_ratio
 
     def get_sta_mask(self, hs_tgt, h, w):
+        L, N, B, C = hs_tgt.shape
         hs_tgt = hs_tgt[-1, :, :, :]
         hs_tgt = hs_tgt.transpose(1, 0)
-        hs_tgt = torch.reshape(hs_tgt, (4, 5, 10, -1)).permute(0, 3, 1, 2)
+        hs_tgt = torch.reshape(hs_tgt, (B, 5, 10, C)).permute(0, 3, 1, 2)
         mask_feature = nn.functional.interpolate(hs_tgt, size=(h, w), mode='nearest', align_corners=None)
         mask_feature = self.sta_mask_transform(mask_feature)
         mask = mask_feature[:, 0, :, :] < mask_feature[:, 1, :, :]
@@ -115,7 +117,17 @@ class Transformer(nn.Module):
             if self.sta_query:
                 if self.sta_query_loc == 'backbone':
                     if self.sta_mask:
-                        sta_mask_flatten = self.get_sta_mask(hs_tgt, h, w)
+                        # sta_mask_flatten = self.get_sta_mask(hs_tgt, h, w)
+                        sta_mask_flatten = mask_flatten
+                        num = sta_mask_flatten.shape[-1]
+                        true_id = [random.sample(range(0, num), num//2)]
+                        sta_mask_flatten[:, true_id] = True
+                        ## 测试，保存mask图
+                        # save_mask = sta_mask_flatten.cpu().numpy()[0]
+                        # save_mask = save_mask.reshape((h, w)).astype(int) * 255
+                        # import cv2
+                        # cv2.imwrite('mask.png', save_mask)
+
                         hs_sta = self.decoder(sta, src, memory_key_padding_mask=sta_mask_flatten, pos=pos_embed,
                                             query_pos=sta_query_embed)    # state query in backbone features
                     else:

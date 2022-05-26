@@ -61,21 +61,25 @@ def show_results(frame, scores, labels, s_labels, boxes):
     currentAxis = plt.gca()
 
     for score, label, s_label, box in zip(scores, labels, s_labels, boxes):
-        rect_box = patches.Rectangle((box[0], box[1]), box[2] - box[0], box[3] - box[1], linewidth=2, edgecolor='r', facecolor='none')
+        if s_label == 1:
+            rect_box = patches.Rectangle((box[0], box[1]), box[2] - box[0], box[3] - box[1], linewidth=2, edgecolor='g', facecolor='none')
+        elif s_label == 2:
+            rect_box = patches.Rectangle((box[0], box[1]), box[2] - box[0], box[3] - box[1], linewidth=2, edgecolor='r', facecolor='none')
         currentAxis.add_patch(rect_box)
 
     plt.show()
 
 
 def demo():
-    os.environ["CUDA_VISIBLE_DEVICES"] = '1'
+    os.environ["CUDA_VISIBLE_DEVICES"] = '2'
     device = torch.device('cuda')
     postprocess = PostProcess()
-    model = torch.load('../checkpoints/model.pth')
+    # model = torch.load('../checkpoints/model.pth')
+    model = torch.load('../checkpoints/model_v2.pth')
     model.to(device)
     model.eval()
 
-    cap = cv2.VideoCapture('../demo_1.mp4')
+    cap = cv2.VideoCapture('../demo_2.mp4')
     while(cap.isOpened()):
         ret, frame = cap.read()
         H, W, C = frame.shape
@@ -106,6 +110,6 @@ def demo():
 
 
 if __name__ == '__main__':
-    # demo()
+    demo()
 
-    build_dataset()
+    # build_dataset()

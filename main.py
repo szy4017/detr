@@ -179,7 +179,7 @@ def main(rank, ws, args):
     data_loader_train = DataLoader(dataset_train, batch_sampler=batch_sampler_train,
                                    collate_fn=utils.collate_fn, num_workers=args.num_workers)
     data_loader_val = DataLoader(dataset_val, args.batch_size, sampler=sampler_val,
-                                 drop_last=False, collate_fn=utils.collate_fn, num_workers=args.num_workers)
+                                 drop_last=False, collate_fn=utils.collate_fn, num_workers=args.num_workers, shuffle=False)
 
     if args.dataset_file == "coco_panoptic":
         # We also evaluate AP during panoptic training, on original coco DS
@@ -223,8 +223,8 @@ def main(rank, ws, args):
             utils.save_on_master(coco_evaluator.coco_eval["bbox"].eval, output_dir / "eval.pth")
 
         # save the whole model
-        print('save the whole model...')
-        torch.save(model, './checkpoints/model.pth')
+        # print('save the whole model...')
+        # torch.save(model, './checkpoints/model_v2.pth')
         return
 
     print("Start training")
@@ -286,15 +286,16 @@ if __name__ == '__main__':
 
     # training setting
     args.batch_size = 4
-    args.epochs = 600
+    args.num_workers = 2
+    args.epochs = 400
     args.dataset_file = 'intruscapes'
     # args.coco_path = '/home/szy/data/intruscapes' # for old server
-    # args.coco_path = '/data/szy4017/data/intruscapes'  # for new server
-    args.coco_path = '/data/szy4017/data/railway'   # for railway dataset
+    args.coco_path = '/data/szy4017/data/intruscapes'  # for new server
+    # args.coco_path = '/data/szy4017/data/railway'   # for railway dataset
     # args.output_dir = './results_repeat_baseline_1'
     # args.output_dir = './results_repeat_ffm_1'
     # args.output_dir = './results_repeat_staquery_1'
-    args.output_dir = './results_railway'
+    args.output_dir = './results_repeat_staquery_mask_ffm_inbackbone_2'
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -302,12 +303,12 @@ if __name__ == '__main__':
     args.sta_query = True
     args.deformable_decoder = False
     args.sta_query_loc = 'backbone'
-    # args.sta_mask = True
+    args.sta_mask = True
     args.num_queries = 50
     args.ffn_model = 'new'
     args.aux_loss = True
-    # args.resume = './checkpoints/detr-r50-e632da11.pth'
-    args.resume = './results_repeat_staquery_ffm_inbackbone_1/checkpoint.pth'
+    args.resume = './checkpoints/detr-r50-e632da11.pth'
+    # args.resume = './results_repeat_staquery_ffm_inbackbone_1/checkpoint.pth'
 
     # train or eval
     # args.mode = 'eval'
@@ -319,7 +320,7 @@ if __name__ == '__main__':
         main(None, None, args)
     else:
         # args.distributed_mode = False
-        os.environ["CUDA_VISIBLE_DEVICES"] = '2, 3'
+        os.environ["CUDA_VISIBLE_DEVICES"] = '2, 4'
         if args.distributed_mode:
             args.world_size = 2
             mp.spawn(main, nprocs=args.world_size, args=(args.world_size, args))  # for distributed training
