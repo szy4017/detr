@@ -264,7 +264,7 @@ class TransformerStateMaskDecoder(nn.Module):
                     post_memory_target_mask = self.atten_mask_predict(memory, (~pre_memory_target_mask).long(), i)
                     post_memory_target_mask = ~post_memory_target_mask.bool()
                 else:
-                    post_memory_target_mask_, memory = self.atten_mask_predict(memory, (~pre_memory_target_mask).long(), i)
+                    post_memory_target_mask, memory = self.atten_mask_predict(memory, (~pre_memory_target_mask).long(), i)
             else:
                 post_memory_target_mask = pre_memory_target_mask
 
