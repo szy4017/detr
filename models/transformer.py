@@ -15,6 +15,7 @@ import torch.nn.functional as F
 from torch import nn, Tensor
 import random
 
+from models.masking import Masking
 
 class Transformer(nn.Module):
 
@@ -32,12 +33,20 @@ class Transformer(nn.Module):
 
         # for decoder
         self.deformable_decoder = deformable_decoder
+        self.sta_mask = sta_mask
         if self.deformable_decoder is not True:
             decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward,
                                                     dropout, activation, normalize_before)
             decoder_norm = nn.LayerNorm(d_model)
-            self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm,
-                                              return_intermediate=return_intermediate_dec, sta_query=sta_query)
+            if self.sta_mask:
+                # self.sta_mask_transform = state_mask_embed()
+                self.decoder = TransformerStateMaskDecoder(decoder_layer, num_decoder_layers, decoder_norm,
+                                                           return_intermediate=return_intermediate_dec,
+                                                           sta_query=sta_query)
+            else:
+                self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm,
+                                                  return_intermediate=return_intermediate_dec,
+                                                  sta_query=sta_query)
         else:
             # for deformable decoder
             from .decoder_deformable import DeformableTransformerDecoderLayer, DeformableTransformerDecoder
@@ -47,9 +56,7 @@ class Transformer(nn.Module):
             self.decoder = DeformableTransformerDecoder(decoder_layer, num_decoder_layers, return_intermediate_dec)
             self.reference_points = nn.Linear(d_model, 2)  # get reference points for deformable decoder
 
-        self.sta_mask = sta_mask
-        if self.sta_mask:
-            self.sta_mask_transform = state_mask_embed()
+
 
         self._reset_parameters()
 
@@ -112,32 +119,39 @@ class Transformer(nn.Module):
         memory = self.encoder(src, src_key_padding_mask=mask_flatten, pos=pos_embed)
 
         if self.deformable_decoder is not True:
-            hs_tgt = self.decoder(tgt, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed, query_pos=tgt_query_embed)
-
             if self.sta_query:
                 if self.sta_query_loc == 'backbone':
                     if self.sta_mask:
                         # sta_mask_flatten = self.get_sta_mask(hs_tgt, h, w)
-                        sta_mask_flatten = mask_flatten
-                        num = sta_mask_flatten.shape[-1]
-                        true_id = [random.sample(range(0, num), num//2)]
-                        sta_mask_flatten[:, true_id] = True
+                        # sta_mask_flatten = mask_flatten
+                        # num = sta_mask_flatten.shape[-1]
+                        # true_id = [random.sample(range(0, num), num//2)]
+                        # sta_mask_flatten[:, true_id] = True
                         ## 测试，保存mask图
                         # save_mask = sta_mask_flatten.cpu().numpy()[0]
                         # save_mask = save_mask.reshape((h, w)).astype(int) * 255
                         # import cv2
                         # cv2.imwrite('mask.png', save_mask)
 
-                        hs_sta = self.decoder(sta, src, memory_key_padding_mask=sta_mask_flatten, pos=pos_embed,
-                                            query_pos=sta_query_embed)    # state query in backbone features
+                        memory_target_mask = torch.zeros((bs, h*w, 1), dtype=src.dtype, device=src.device).bool()
+                        hs_tgt = self.decoder(tgt, memory, flag=0, memory_key_padding_mask=mask_flatten, pos=pos_embed,
+                                              query_pos=tgt_query_embed, memory_target_mask=memory_target_mask)
+                        hs_sta = self.decoder(sta, src, flag=1, memory_key_padding_mask=mask_flatten, pos=pos_embed,
+                                              query_pos=sta_query_embed, memory_target_mask=memory_target_mask)    # state query in backbone features
                     else:
+                        hs_tgt = self.decoder(tgt, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed,
+                                              query_pos=tgt_query_embed)
                         hs_sta = self.decoder(sta, src, memory_key_padding_mask=mask_flatten, pos=pos_embed,
-                                            query_pos=sta_query_embed)    # state query in backbone features
+                                              query_pos=sta_query_embed)    # state query in backbone features
                 else:
+                    hs_tgt = self.decoder(tgt, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed,
+                                          query_pos=tgt_query_embed)
                     hs_sta = self.decoder(sta, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed,
                                           query_pos=sta_query_embed)    # state query in decoder features
                 return hs_tgt.transpose(1, 2), hs_sta.transpose(1, 2), memory.permute(1, 2, 0).view(bs, c, h, w)
             else:
+                hs_tgt = self.decoder(tgt, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed,
+                                      query_pos=tgt_query_embed)
                 return hs_tgt.transpose(1, 2), memory.permute(1, 2, 0).view(bs, c, h, w)
         else:
             # for deformable decoder
@@ -203,6 +217,65 @@ class TransformerDecoder(nn.Module):
                            tgt_key_padding_mask=tgt_key_padding_mask,
                            memory_key_padding_mask=memory_key_padding_mask,
                            pos=pos, query_pos=query_pos)
+            if self.return_intermediate:
+                intermediate.append(self.norm(output))
+
+        if self.norm is not None:
+            output = self.norm(output)
+            if self.return_intermediate:
+                intermediate.pop()
+                intermediate.append(output)
+
+        if self.return_intermediate:
+            return torch.stack(intermediate)
+
+        return output.unsqueeze(0)
+
+
+class TransformerStateMaskDecoder(nn.Module):
+
+    def __init__(self, decoder_layer, num_layers, norm=None, return_intermediate=False,
+                 sta_query=True, sta_mask=True, embed_dim=256, pruning_loc=[2, 4], token_ratio=[0.6, 0.3]):
+        super().__init__()
+        self.layers = _get_clones(decoder_layer, num_layers)
+        self.num_layers = num_layers
+        self.norm = norm
+        self.return_intermediate = return_intermediate
+        self.sta_query = sta_query
+        self.sta_mask = sta_mask
+        self.pruning_loc = pruning_loc
+        if self.sta_mask:
+            self.atten_mask_predict = Masking(embed_dim, pruning_loc, token_ratio)
+
+    def forward(self, tgt, memory, flag,
+                tgt_mask: Optional[Tensor] = None,
+                memory_target_mask: Optional[Tensor] = None,
+                tgt_key_padding_mask: Optional[Tensor] = None,
+                memory_key_padding_mask: Optional[Tensor] = None,
+                pos: Optional[Tensor] = None,
+                query_pos: Optional[Tensor] = None):
+        output = tgt
+
+        intermediate = []
+        pre_memory_target_mask = memory_target_mask
+        for i, layer in enumerate(self.layers):
+            if (i in self.pruning_loc) and flag == 1:
+                if self.training:
+                    post_memory_target_mask = self.atten_mask_predict(memory, (~pre_memory_target_mask).long(), i)
+                    post_memory_target_mask = ~post_memory_target_mask.bool()
+                else:
+                    post_memory_target_mask_, memory = self.atten_mask_predict(memory, (~pre_memory_target_mask).long(), i)
+            else:
+                post_memory_target_mask = pre_memory_target_mask
+
+            post_memory_mask = post_memory_target_mask.transpose(2, 1)
+            post_memory_mask = post_memory_mask.repeat(8, 50, 1)
+            output = layer(output, memory, tgt_mask=tgt_mask,
+                           memory_mask=post_memory_mask,
+                           tgt_key_padding_mask=tgt_key_padding_mask,
+                           memory_key_padding_mask=memory_key_padding_mask,
+                           pos=pos, query_pos=query_pos)
+            pre_memory_target_mask = post_memory_target_mask
             if self.return_intermediate:
                 intermediate.append(self.norm(output))
 
@@ -307,16 +380,6 @@ class TransformerDecoderLayer(nn.Module):
         self.activation = _get_activation_fn(activation)
         self.normalize_before = normalize_before
 
-        # self.sta_query = sta_query
-        # if self.sta_query:
-        #     Self attention for state query
-            # self.self_attn_sta = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
-            # self.multihead_attn_sta = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
-            # Feedforward model for state query
-            # self.linear1_sta = nn.Linear(d_model, dim_feedforward)
-            # self.dropout_sta = nn.Dropout(dropout)
-            # self.linear2_sta = nn.Linear(dim_feedforward, d_model)
-
     def with_pos_embed(self, tensor, pos: Optional[Tensor]):
         return tensor if pos is None else tensor + pos
 
@@ -343,31 +406,6 @@ class TransformerDecoderLayer(nn.Module):
         tgt = tgt + self.dropout3(tgt2)
         tgt = self.norm3(tgt)
         return tgt
-
-    # no use
-    ## 增加state query
-    # def forward_post_state(self, sta, memory,
-    #                        sta_mask: Optional[Tensor] = None,
-    #                        memory_mask: Optional[Tensor] = None,
-    #                        sta_key_padding_mask: Optional[Tensor] = None,
-    #                        memory_key_padding_mask: Optional[Tensor] = None,
-    #                        pos: Optional[Tensor] = None,
-    #                        query_pos: Optional[Tensor] = None):
-    #     q = k = self.with_pos_embed(sta, query_pos) ## 给state query添加位置编码
-    #     sta2 = self.self_attn_sta(q, k, value=sta, attn_mask=sta_mask,
-    #                           key_padding_mask=sta_key_padding_mask)[0] ## 进行一次self attention操作，得到输出sta2
-    #     sta = sta + self.dropout1(sta2) ## 对sta2进行drop out操作
-    #     sta = self.norm1(sta)   ## 归一化处理
-    #     sta2 = self.multihead_attn_sta(query=self.with_pos_embed(sta, query_pos),
-    #                                key=self.with_pos_embed(memory, pos),
-    #                                value=memory, attn_mask=memory_mask,
-    #                                key_padding_mask=memory_key_padding_mask)[0] ## 再进行一次self attenrion操作，这里引入了memory变量，memory是decoder的输出，是编码的图像特征
-    #     sta = sta + self.dropout2(sta2) ## 对sta2进行drop out操作
-    #     sta = self.norm2(sta)   ## 归一化处理
-    #     sta2 = self.linear2_sta(self.dropout_sta(self.activation(self.linear1_sta(sta))))   ## 对sta进行线性层特征转换，feed forward model
-    #     sta = sta + self.dropout3(sta2) ## 对sta2进行drop out操作
-    #     sta = self.norm3(sta)   #¥ 归一化处理
-    #     return sta
 
     def forward_pre(self, tgt, memory,
                     tgt_mask: Optional[Tensor] = None,
