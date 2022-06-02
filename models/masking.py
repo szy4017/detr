@@ -36,6 +36,26 @@ class MaskPredictor(nn.Module):
         return self.out_conv(x)
 
 
+class MaskLoss(nn.Module):
+    """ calculate the loss of mask
+
+    """
+    def __init__(self, pruning_loc=[3, 6, 9], token_ratio=[0.7, 0.5, 0.3]):
+        super().__init__()
+        self.pruning_loc = pruning_loc
+        self.token_ratio = token_ratio
+
+    def forward(self, pred_mask, pruning_index):
+        if pruning_index not in self.pruning_loc:
+            raise ValueError("this index is not in pruning")
+
+        index = self.pruning_loc.index(pruning_index)
+        pred_ratio = pred_mask.mean(1)
+        mask_loss = torch.mean(((pred_ratio - self.token_ratio[index]) ** 2), dim=1, keepdim=True)
+
+        return mask_loss
+
+
 class Masking(nn.Module):
     """ update the decision mask
     input:
@@ -52,6 +72,7 @@ class Masking(nn.Module):
         self.token_ratio = token_ratio
         predictor_list = [MaskPredictor(self.embed_dim) for _ in range(len(self.pruning_loc))]
         self.mask_score_preict = nn.ModuleList(predictor_list)
+        self.mask_loss_cal = MaskLoss(pruning_loc, token_ratio)
 
     def forward(self, x, pre_mask, pruning_index):
         if pruning_index not in self.pruning_loc:
@@ -61,8 +82,8 @@ class Masking(nn.Module):
         pred_mask_score = self.mask_score_preict[self.pruning_loc.index(pruning_index)](x.transpose(1, 0), pre_mask).reshape(B, -1, 2)
         if self.training:
             post_mask = F.gumbel_softmax(pred_mask_score, hard=True)[:, :, 0:1] * pre_mask
-
-            return post_mask
+            mask_loss = self.mask_loss_cal(post_mask, pruning_index)
+            return post_mask, mask_loss
         else:
             # post_mask = F.gumbel_softmax(pred_mask_score, hard=True)[:, :, 0:1] * pre_mask
 
@@ -71,9 +92,8 @@ class Masking(nn.Module):
             keep_token_num = int(N * self.token_ratio[self.pruning_loc.index(pruning_index)])
             keep_policy = torch.argsort(score, dim=1, descending=True)[:, :keep_token_num]
             post_mask = batch_index_select(pre_mask, keep_policy)
-            mask_pruning_x = batch_index_select(x, keep_policy)
 
-            return post_mask, mask_pruning_x
+            return post_mask, keep_policy
 
 
 def batch_index_select(x, idx):

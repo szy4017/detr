@@ -223,8 +223,10 @@ def main(rank, ws, args):
             utils.save_on_master(coco_evaluator.coco_eval["bbox"].eval, output_dir / "eval.pth")
 
         # save the whole model
-        # print('save the whole model...')
-        # torch.save(model, './checkpoints/model_v2.pth')
+        print('save the whole model...')
+        save_path = './checkpoints/State-DETR.pth'
+        torch.save(model, save_path)
+        print('save_path: ', save_path)
         return
 
     print("Start training")
@@ -234,7 +236,7 @@ def main(rank, ws, args):
             sampler_train.set_epoch(epoch)
         train_stats = train_one_epoch(
             model, criterion, data_loader_train, optimizer, device, epoch,
-            args.clip_max_norm)
+            args.clip_max_norm, args.sta_mask)
         lr_scheduler.step()
         if args.output_dir: # 保存模型输出，包括模型参数和训练过程的数据记录
             checkpoint_paths = [output_dir / 'checkpoint.pth']
@@ -293,8 +295,8 @@ if __name__ == '__main__':
     args.coco_path = '/data/szy4017/data/intruscapes'  # for new server
     # args.coco_path = '/data/szy4017/data/railway'   # for railway dataset
     # args.output_dir = './results_repeat_baseline_1'
-    args.output_dir = './results_repeat_staquery_mask_ffm_inbackbone_1'
-    # args.output_dir = './results_repeat_atten_mask_ffm_inbackbone_1'
+    # args.output_dir = './results_repeat_staquery_mask_ffm_inbackbone_1'
+    args.output_dir = './results_repeat_atten_mask_ffm_inbackbone_1'
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -306,22 +308,23 @@ if __name__ == '__main__':
     args.num_queries = 50
     args.ffn_model = 'new'
     args.aux_loss = True
-    args.resume = './checkpoints/detr-r50-e632da11.pth'
-    # args.resume = './results_repeat_staquery_ffm_inbackbone_1/checkpoint.pth'
+    # args.resume = './checkpoints/detr-r50-e632da11.pth'
+    args.resume = './results_repeat_atten_mask_ffm_inbackbone_1/checkpoint.pth'
 
     # train or eval
     args.mode = 'eval'
     if args.mode == 'eval':
-        os.environ["CUDA_VISIBLE_DEVICES"] = '3'
+        os.environ["CUDA_VISIBLE_DEVICES"] = '1'
         args.eval = True
         args.resume = os.path.join(args.output_dir, 'checkpoint.pth')
         args.distributed_mode = False
         main(None, None, args)
     else:
         # args.distributed_mode = False
-        os.environ["CUDA_VISIBLE_DEVICES"] = '2, 3'
         if args.distributed_mode:
-            args.world_size = 2
+            os.environ["CUDA_VISIBLE_DEVICES"] = '1, 4, 5'
+            args.world_size = 3
             mp.spawn(main, nprocs=args.world_size, args=(args.world_size, args))  # for distributed training
         else:
+            os.environ["CUDA_VISIBLE_DEVICES"] = '5'
             main(None, None, args)

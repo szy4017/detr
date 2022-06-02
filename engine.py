@@ -16,7 +16,8 @@ from datasets.panoptic_eval import PanopticEvaluator
 
 def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
-                    device: torch.device, epoch: int, max_norm: float = 0):
+                    device: torch.device, epoch: int, max_norm: float = 0,
+                    sta_mask: bool = False):
     model.train()
     criterion.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
@@ -33,6 +34,9 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         outputs = model(samples)
         loss_dict = criterion(outputs, targets)
         weight_dict = criterion.weight_dict ## weight是每个loss在计算total loss的权重系数
+        if sta_mask:
+            loss_dict['loss_state_mask'] = outputs['state_mask_loss'].mean()
+            weight_dict['loss_state_mask'] = 1
         losses = sum(loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if k in weight_dict)
 
         # reduce losses over all GPUs for logging purposes
@@ -69,6 +73,8 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         # metric log记录，添加state的记录
         metric_logger.update(loss=loss_value, class_loss=loss_class_value, state_loss=loss_state_value,
                              **loss_dict_reduced_scaled, **loss_dict_reduced_unscaled)
+        if sta_mask:
+            metric_logger.update(state_mask_loss=loss_dict_reduced['loss_state_mask'])
         metric_logger.update(class_error=loss_dict_reduced['class_error'])
         metric_logger.update(state_error=loss_dict_reduced['state_error'])
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])

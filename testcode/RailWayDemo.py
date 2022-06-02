@@ -79,7 +79,7 @@ def demo():
     model.to(device)
     model.eval()
 
-    cap = cv2.VideoCapture('../demo_2.mp4')
+    cap = cv2.VideoCapture('../demo_1.mp4')
     while(cap.isOpened()):
         ret, frame = cap.read()
         H, W, C = frame.shape

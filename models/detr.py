@@ -23,7 +23,7 @@ from .transformer import build_transformer
 
 class DETR(nn.Module):
     """ This is the DETR module that performs object detection """
-    def __init__(self, backbone, transformer, num_classes, num_states, num_queries, aux_loss=False, sta_query=False, ffn_model='old'):
+    def __init__(self, backbone, transformer, num_classes, num_states, num_queries, aux_loss=False, sta_query=False, sta_mask=False, ffn_model='old'):
         """ Initializes the model.
         Parameters:
             backbone: torch module of the backbone to be used. See backbone.py
@@ -39,6 +39,7 @@ class DETR(nn.Module):
         hidden_dim = transformer.d_model
         self.ffn_model = ffn_model
         self.sta_query = sta_query
+        self.sta_mask = sta_mask
         assert self.ffn_model in ['old', 'new']
         if self.ffn_model == 'old':
             self.class_embed = nn.Linear(hidden_dim, num_classes + 1)  ## 类别分类器
@@ -84,7 +85,10 @@ class DETR(nn.Module):
 
         if self.sta_query:
             query_embed = {'tgt': self.tgt_query_embed, 'sta': self.sta_query_embed}
-            hs_tgt, hs_sta, _ = self.transformer(self.input_proj(src), mask, query_embed, pos[-1])
+            if self.sta_mask:
+                hs_tgt, hs_sta, _, mask_loss = self.transformer(self.input_proj(src), mask, query_embed, pos[-1])
+            else:
+                hs_tgt, hs_sta, _ = self.transformer(self.input_proj(src), mask, query_embed, pos[-1])
         else:
             query_embed = {'tgt': self.tgt_query_embed}
             hs_tgt, _ = self.transformer(self.input_proj(src), mask, query_embed, pos[-1])
@@ -116,6 +120,9 @@ class DETR(nn.Module):
 
         if self.aux_loss:
             out['aux_outputs'] = self._set_aux_loss(outputs_class, outputs_coord, outputs_intru_state)   # 输出所有decoder层的结果，用于辅助分类器的损失计算
+        if self.sta_mask and self.training:
+            mask_loss = torch.cat(mask_loss, dim=1)
+            out['state_mask_loss'] = torch.mean(mask_loss, dim=1, keepdim=True)
         return out
 
     @torch.jit.unused
@@ -364,8 +371,8 @@ class PostProcess(nn.Module):
         s_scores, s_labels = s_prob[..., :-1].max(-1)   # 同理得到目标的入侵状态类别和置信度得分
 
         # 保存原始输出为txt
-        save_logits = prob.cpu().numpy().reshape(-1, prob.shape[-1])
-        save_states = s_prob.cpu().numpy().reshape(-1, s_prob.shape[-1])
+        # save_logits = prob.cpu().numpy().reshape(-1, prob.shape[-1])
+        # save_states = s_prob.cpu().numpy().reshape(-1, s_prob.shape[-1])
 
         # convert to [x0, y0, x1, y1] format
         boxes = box_ops.box_cxcywh_to_xyxy(out_bbox)
@@ -455,6 +462,7 @@ def build(args):
         num_queries=args.num_queries,
         aux_loss=args.aux_loss,
         sta_query=args.sta_query,
+        sta_mask=args.sta_mask,
         ffn_model=args.ffn_model,
     )
     if args.masks:

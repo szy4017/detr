@@ -15,7 +15,7 @@ import torch.nn.functional as F
 from torch import nn, Tensor
 import random
 
-from models.masking import Masking
+from models.masking import Masking, batch_index_select
 
 class Transformer(nn.Module):
 
@@ -42,7 +42,9 @@ class Transformer(nn.Module):
                 # self.sta_mask_transform = state_mask_embed()
                 self.decoder = TransformerStateMaskDecoder(decoder_layer, num_decoder_layers, decoder_norm,
                                                            return_intermediate=return_intermediate_dec,
-                                                           sta_query=sta_query)
+                                                           sta_query=sta_query,
+                                                           embed_dim=256, pruning_loc=[2, 3, 4, 5],
+                                                           token_ratio=[0.6, 0.6, 0.3, 0.3])
             else:
                 self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm,
                                                   return_intermediate=return_intermediate_dec,
@@ -134,10 +136,11 @@ class Transformer(nn.Module):
                         # cv2.imwrite('mask.png', save_mask)
 
                         memory_target_mask = torch.zeros((bs, h*w, 1), dtype=src.dtype, device=src.device).bool()
-                        hs_tgt = self.decoder(tgt, memory, flag=0, memory_key_padding_mask=mask_flatten, pos=pos_embed,
+                        hs_tgt, _ = self.decoder(tgt, memory, flag=0, memory_key_padding_mask=mask_flatten, pos=pos_embed,
                                               query_pos=tgt_query_embed, memory_target_mask=memory_target_mask)
-                        hs_sta = self.decoder(sta, src, flag=1, memory_key_padding_mask=mask_flatten, pos=pos_embed,
-                                              query_pos=sta_query_embed, memory_target_mask=memory_target_mask)    # state query in backbone features
+                        hs_sta, mask_loss = self.decoder(sta, src, flag=1, memory_key_padding_mask=mask_flatten, pos=pos_embed,
+                                              query_pos=sta_query_embed, memory_target_mask=memory_target_mask)
+                        return hs_tgt.transpose(1, 2), hs_sta.transpose(1, 2), memory.permute(1, 2, 0).view(bs, c, h, w), mask_loss
                     else:
                         hs_tgt = self.decoder(tgt, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed,
                                               query_pos=tgt_query_embed)
@@ -257,14 +260,20 @@ class TransformerStateMaskDecoder(nn.Module):
         output = tgt
 
         intermediate = []
+        mask_loss_list = []
         pre_memory_target_mask = memory_target_mask
         for i, layer in enumerate(self.layers):
             if (i in self.pruning_loc) and flag == 1:
                 if self.training:
-                    post_memory_target_mask = self.atten_mask_predict(memory, (~pre_memory_target_mask).long(), i)
+                    post_memory_target_mask, target_mask_loss = self.atten_mask_predict(memory, (~pre_memory_target_mask).long(), i)
                     post_memory_target_mask = ~post_memory_target_mask.bool()
+                    mask_loss_list.append(target_mask_loss)
                 else:
-                    post_memory_target_mask, memory = self.atten_mask_predict(memory, (~pre_memory_target_mask).long(), i)
+                    post_memory_target_mask, keep_policy = self.atten_mask_predict(memory, (~pre_memory_target_mask).long(), i)
+                    post_memory_target_mask = ~post_memory_target_mask.bool()
+                    memory = batch_index_select(memory.transpose(1, 0), keep_policy).transpose(1, 0)
+                    pos = batch_index_select(pos.transpose(1, 0), keep_policy).transpose(1, 0)
+                    memory_key_padding_mask = batch_index_select(memory_key_padding_mask, keep_policy)
             else:
                 post_memory_target_mask = pre_memory_target_mask
 
@@ -286,9 +295,9 @@ class TransformerStateMaskDecoder(nn.Module):
                 intermediate.append(output)
 
         if self.return_intermediate:
-            return torch.stack(intermediate)
+            return torch.stack(intermediate), mask_loss_list
 
-        return output.unsqueeze(0)
+        return output.unsqueeze(0), mask_loss_list
 
 
 class TransformerEncoderLayer(nn.Module):
