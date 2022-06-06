@@ -98,7 +98,7 @@ class CocoEvaluator(object):
         imgPath = os.path.join(root_path, file_name)
         print(imgPath)
         img = cv.imread(imgPath)
-        # cv.imwrite('img.png', img)
+        cv.imwrite('img.png', img)
         img_rgb = bgr2rgb(img)
 
         # plt
