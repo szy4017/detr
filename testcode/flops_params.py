@@ -6,7 +6,7 @@ from util.misc import nested_tensor_from_tensor_list
 
 os.environ["CUDA_VISIBLE_DEVICES"] = '4'
 device = torch.device('cuda')
-model = torch.load('../checkpoints/State-DETR.pth')
+model = torch.load('../checkpoints/model.pth')
 input = torch.rand(3, 540, 960)
 x = nested_tensor_from_tensor_list([input])
 x = x.to(device)

@@ -201,12 +201,16 @@ def main(rank, ws, args):
             state_dict = dict()
             checkpoint = torch.load(args.resume, map_location='cpu')
             model_dict = model_without_ddp.state_dict()
+            flag = 0
             for k, v in checkpoint['model'].items():
                 if k in model_dict.keys():
                     if v.shape == model_dict[k].shape:
                         state_dict[k] = v
-                # else:
-                    # print(k)
+                        flag = flag + 1
+            if flag == model_dict.keys().__len__():
+                print('completely load')
+            else:
+                print('partly load')
             #state_dict = {k: v for k, v in checkpoint['model'].items() if k in model_dict.keys()}
             model_dict.update(state_dict)   ## 更新与checkpoint中相应key的参数
         model_without_ddp.load_state_dict(model_dict)  ## 加载checkpint中的model
@@ -224,7 +228,7 @@ def main(rank, ws, args):
 
         # save the whole model
         print('save the whole model...')
-        save_path = './checkpoints/State-DETR.pth'
+        save_path = './checkpoints/Mask-State-DETR.pth'
         torch.save(model, save_path)
         print('save_path: ', save_path)
         return
@@ -308,13 +312,13 @@ if __name__ == '__main__':
     args.num_queries = 50
     args.ffn_model = 'new'
     args.aux_loss = True
-    # args.resume = './checkpoints/detr-r50-e632da11.pth'
-    args.resume = './results_repeat_atten_mask_ffm_inbackbone_1/checkpoint.pth'
+    args.resume = './checkpoints/detr-r50-e632da11.pth'
+    # args.resume = './results_repeat_atten_mask_ffm_inbackbone_1/checkpoint.pth'
 
     # train or eval
     args.mode = 'eval'
     if args.mode == 'eval':
-        os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+        os.environ["CUDA_VISIBLE_DEVICES"] = '1'
         args.eval = True
         args.resume = os.path.join(args.output_dir, 'checkpoint.pth')
         args.distributed_mode = False

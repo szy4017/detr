@@ -93,6 +93,15 @@ class Masking(nn.Module):
             keep_policy = torch.argsort(score, dim=1, descending=True)[:, :keep_token_num]
             post_mask = batch_index_select(pre_mask, keep_policy)
 
+            # save mask
+            # if self.pruning_loc.index(pruning_index) == 0:
+            #     save_mask = pre_mask
+            #     save_mask[:, keep_policy[0, :], :] = 0
+            #     save_mask = save_mask.cpu().numpy()[0, :, 0]
+            #     save_mask = save_mask.reshape((21, 42)).astype(int) * 255
+            #     import cv2
+            #     cv2.imwrite('mask.png', save_mask)
+
             return post_mask, keep_policy
 
 
