@@ -127,8 +127,29 @@ state query是根据object query的结果来去从CNN backbone中获取空间特
 的设计，实现小数据的训练。总结而言，模型可以分为以下四个版本：base；base+swin；base+big data finetune；base+swin+big data finetune。这里需要注意的一点是，state
 query encoder要尽量做到轻量，小改进有大进展。
 
-**20220429与郭树璇老师交流**
-1. 
+**20220608整体思路整理**
+由于在小数据集上无法直接训练transformer模型，所以限定所有模型是在COCO上进行预训练之后再finetune的结果。
+总结我们的motivation
+由于self attention可以更有效地进行图像的全局建模，因此在进行目标检测的类别预测时，self attention不仅可以根据box内的特征进行类别预测，还可以根据box周围的特征进行类别
+预测，也就是能够实现目标的*环境关系建模*。在行人入侵检测任务中，我们需要根据行人在环境中的状态来分析其入侵状态，其入侵状态与人物目标所处周围环境息息相关。相比CNN受限的
+全局建模能力，transformer框架更适合用于需要考虑目标和环境相互关系的行人入侵检测任务。
+总结我们的改进
+（1）prediction head：融合目标自身和环境状态特征进行入侵状态的预测；
+（2）state query：在网络的浅层进行state特征的query，浅层特征图中保留了更多的图像空间信息更有利于目标的环境关系建模，query得到的state特征能够辅助提升入侵状态预测；
+（3）state mask：由于state特征在入侵预测中是起辅助作用，并且在state query是稀疏分布的，为了模型效率，采用dynamic mask策略对state query的特征图进行动态mask，不仅
+可以进一步提升入侵预测的准确率，并且能够减少运算量；
+（4）以上改进都是基于DETR在COCO上的预训练模型
+
+performance版本：替换原有DETR中的encoder，decoder模块，并进行一定的改进
+（1）encoder：采用swin transformer结构，获取多层特征金字塔，提升性能
+（2）decoder：采用deformable transformer结构，获取关键特征进行self attention，提升性能，加快模型收敛
+（3）整理模型采用在COCO上预训练再在intruscapes上finetune
+
+future work：ViT在大尺度小数据集上的自监督预训练方法
+（1）transformer模型data-hunger特性，使其难以直接应用于小数据；
+（2）已有一些小尺度图像的子监督训练方法，但是在大尺度图像中图像特征不是单一实例的
+
+
 
 ![Positional Encoding](.github/positional_encoding.PNG)
 

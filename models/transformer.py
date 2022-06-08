@@ -43,8 +43,8 @@ class Transformer(nn.Module):
                 self.decoder = TransformerStateMaskDecoder(decoder_layer, num_decoder_layers, decoder_norm,
                                                            return_intermediate=return_intermediate_dec,
                                                            sta_query=sta_query,
-                                                           embed_dim=256, pruning_loc=[2, 3, 4, 5],
-                                                           token_ratio=[0.6, 0.6, 0.3, 0.3])
+                                                           embed_dim=256, pruning_loc=[2, 4],
+                                                           token_ratio=[0.6, 0.3])
             else:
                 self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm,
                                                   return_intermediate=return_intermediate_dec,
@@ -137,9 +137,9 @@ class Transformer(nn.Module):
 
                         memory_target_mask = torch.zeros((bs, h*w, 1), dtype=src.dtype, device=src.device).bool()
                         hs_tgt, _ = self.decoder(tgt, memory, flag=0, memory_key_padding_mask=mask_flatten, pos=pos_embed,
-                                              query_pos=tgt_query_embed, memory_target_mask=memory_target_mask)
+                                                 query_pos=tgt_query_embed, memory_target_mask=memory_target_mask)
                         hs_sta, mask_loss = self.decoder(sta, src, flag=1, memory_key_padding_mask=mask_flatten, pos=pos_embed,
-                                              query_pos=sta_query_embed, memory_target_mask=memory_target_mask)
+                                                         query_pos=sta_query_embed, memory_target_mask=memory_target_mask)
                         return hs_tgt.transpose(1, 2), hs_sta.transpose(1, 2), memory.permute(1, 2, 0).view(bs, c, h, w), mask_loss
                     else:
                         hs_tgt = self.decoder(tgt, memory, memory_key_padding_mask=mask_flatten, pos=pos_embed,
@@ -248,7 +248,7 @@ class TransformerStateMaskDecoder(nn.Module):
         self.sta_mask = sta_mask
         self.pruning_loc = pruning_loc
         if self.sta_mask:
-            self.atten_mask_predict = Masking(embed_dim, pruning_loc, token_ratio)
+            self.atten_mask_predict = Masking(embed_dim, pruning_loc, token_ratio, num_layers)
 
     def forward(self, tgt, memory, flag,
                 tgt_mask: Optional[Tensor] = None,
@@ -263,7 +263,7 @@ class TransformerStateMaskDecoder(nn.Module):
         mask_loss_list = []
         pre_memory_target_mask = memory_target_mask
         for i, layer in enumerate(self.layers):
-            if (i in self.pruning_loc) and flag == 1:
+            if (i >= self.pruning_loc[0]) and flag == 1:
                 if self.training:
                     post_memory_target_mask, target_mask_loss = self.atten_mask_predict(memory, (~pre_memory_target_mask).long(), i)
                     post_memory_target_mask = ~post_memory_target_mask.bool()

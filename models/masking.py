@@ -40,7 +40,7 @@ class MaskLoss(nn.Module):
     """ calculate the loss of mask
 
     """
-    def __init__(self, pruning_loc=[3, 6, 9], token_ratio=[0.7, 0.5, 0.3]):
+    def __init__(self, pruning_loc, token_ratio):
         super().__init__()
         self.pruning_loc = pruning_loc
         self.token_ratio = token_ratio
@@ -65,36 +65,59 @@ class Masking(nn.Module):
     output:
         post_mask: tensor([B, N, 1]), the post mask
     """
-    def __init__(self, embed_dim=256, pruning_loc=[3, 6, 9], token_ratio=[0.7, 0.5, 0.3]):
+    def __init__(self, embed_dim=256, pruning_loc=[2, 4], token_ratio=[0.6, 0.3], num_layers=6):
         super().__init__()
         self.embed_dim = embed_dim
         self.pruning_loc = pruning_loc
         self.token_ratio = token_ratio
-        predictor_list = [MaskPredictor(self.embed_dim) for _ in range(len(self.pruning_loc))]
+        self.num_layers = num_layers
+        self.loc, self.ratio_train, self.ratio_val = self.pruning_ratio_transform()
+        self.mask_loss_cal = MaskLoss(self.loc, self.ratio_train)
+        predictor_list = [MaskPredictor(self.embed_dim) for _ in range(len(self.loc))]
         self.mask_score_preict = nn.ModuleList(predictor_list)
-        self.mask_loss_cal = MaskLoss(pruning_loc, token_ratio)
+
+    def pruning_ratio_transform(self):
+        loc = []
+        ratio_train = []
+        ratio_val = []
+        for l in range(0, self.num_layers):
+            if l >= self.pruning_loc[0]:
+                loc.append(l)
+
+                if l in self.pruning_loc:
+                    ratio_train.append(self.token_ratio[self.pruning_loc.index(l)])
+                    ratio_val.append(self.token_ratio[self.pruning_loc.index(l)])
+                else:
+                    ratio_train.append(ratio_train[-1])
+                    ratio_val.append(1.0)
+        return loc, ratio_train, ratio_val
 
     def forward(self, x, pre_mask, pruning_index):
-        if pruning_index not in self.pruning_loc:
+        if pruning_index not in self.loc:
             raise ValueError("this index is not in pruning")
 
         N, B, C = x.shape
-        pred_mask_score = self.mask_score_preict[self.pruning_loc.index(pruning_index)](x.transpose(1, 0), pre_mask).reshape(B, -1, 2)
+        pred_mask_score = self.mask_score_preict[self.loc.index(pruning_index)](x.transpose(1, 0), pre_mask).reshape(B, -1, 2)
         if self.training:
             post_mask = F.gumbel_softmax(pred_mask_score, hard=True)[:, :, 0:1] * pre_mask
             mask_loss = self.mask_loss_cal(post_mask, pruning_index)
             return post_mask, mask_loss
         else:
-            # post_mask = F.gumbel_softmax(pred_mask_score, hard=True)[:, :, 0:1] * pre_mask
-
-            # return post_mask
             score = pred_mask_score[:, :, 0]
-            keep_token_num = int(N * self.token_ratio[self.pruning_loc.index(pruning_index)])
+            keep_token_num = int(N * self.ratio_val[self.loc.index(pruning_index)])
             keep_policy = torch.argsort(score, dim=1, descending=True)[:, :keep_token_num]
             post_mask = batch_index_select(pre_mask, keep_policy)
 
             # save mask
+            # import numpy as np
             # if self.pruning_loc.index(pruning_index) == 0:
+            #     save_policy = keep_policy.cpu().numpy()
+            #     np.save('policy_06.npy', save_policy)
+            # if self.pruning_loc.index(pruning_index) == 3:
+            #     save_policy = keep_policy.cpu().numpy()
+            #     np.save('policy_03.npy', save_policy)
+
+            # if self.pruning_loc.index(pruning_index) == 3:
             #     save_mask = pre_mask
             #     save_mask[:, keep_policy[0, :], :] = 0
             #     save_mask = save_mask.cpu().numpy()[0, :, 0]
@@ -124,11 +147,17 @@ def batch_index_select(x, idx):
         raise NotImplementedError
 
 
+
 if __name__ == '__main__':
-    x = torch.rand((1, 20, 384))
-    pre_mask = torch.ones((1, 20, 1))
-    masking = Masking()
-    masking.eval()
-    post_mask, post_x = masking(x, pre_mask, pruning_index=3)
+    # x = torch.rand((1, 20, 384))
+    # pre_mask = torch.ones((1, 20, 1))
+    # masking = Masking()
+    # masking.eval()
+    # post_mask, post_x = masking(x, pre_mask, pruning_index=3)
+    masking = Masking(pruning_loc=[1, 3, 5], token_ratio=[0.1, 0.4, 0.7], num_layers=7)
+    loc, ratio_train, ratio_val = masking.pruning_ratio_transform()
+    print(loc)
+    print(ratio_train)
+    print(ratio_val)
     pass
 
