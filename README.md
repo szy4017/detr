@@ -149,6 +149,20 @@ future work：ViT在大尺度小数据集上的自监督预训练方法
 （1）transformer模型data-hunger特性，使其难以直接应用于小数据；
 （2）已有一些小尺度图像的子监督训练方法，但是在大尺度图像中图像特征不是单一实例的
 
+**20220623与郭树璇老师交流**
+缩小自己工作focus的点，关注与state上的结果，先不改变DETR上已实现的研究成果：
+（1）CNN backbone based state query：在基于CNN backbone输出特征图上进行state query获取包含更多图像局部信息入侵状态特征，state query
+的引入，不仅可以提高入侵检测的准确率，而且能够辅助提高目标检测的准确率；
+（2）feature merge prediction module：基于多层fc结果的隐层特征融合模块用于入侵状态的预测，同时解释的state query特征可以辅助object
+query特征进行行人入侵状态的预测；
+（3）adaptive query mask：根据encoder序列自身特征和object query信息来为每一个state query预测一个mask，以缓解由于state query导致的
+模型计算量增加，提高推理速度，可能还能提高准确率；
+（4）dataset，cityintrusion和intruscapes，对比intruscapes的入侵检测任务难度更高；
+接下来的工作安排：
+（1）完善adaptive query mask，实现object query的引入，实现预测定制的query mask，并测试不同mask比例下的结果；
+（2）related work的整理，一部分是入侵检测工作的整理，一部分是目标检测SOTA工作在入侵检测任务的应用；
+（3）整理数据集信息，cityscapes，citypersons，cityintrusion，intruscapes，或其他入侵检测数据，或行人检测数据集（可通过增加标签
+改造成入侵检测数据集）。
 
 
 ![Positional Encoding](.github/positional_encoding.PNG)
