@@ -27,12 +27,14 @@ class MaskPredictor(nn.Module):
             nn.LogSoftmax(dim=-1)
         )
 
-    def forward(self, x, policy):
+    def forward(self, x, query, policy):
         x = self.in_conv(x)
         B, N, C = x.size()
+        n, b, c = query.shape
         local_x = x[:, :, :C//2]
         global_x = (x[:, :, C//2:] * policy).sum(dim=1, keepdim=True) / torch.sum(policy, dim=1, keepdim=True)
         x = torch.cat([local_x, global_x.expand(B, N, C//2)], dim=-1)
+        feature = torch.cat((x, query), dim=-1)
         return self.out_conv(x)
 
 
@@ -92,12 +94,15 @@ class Masking(nn.Module):
                     ratio_val.append(1.0)
         return loc, ratio_train, ratio_val
 
-    def forward(self, x, pre_mask, pruning_index):
+    def forward(self, x, query, pre_mask, pruning_index):
         if pruning_index not in self.loc:
             raise ValueError("this index is not in pruning")
 
         N, B, C = x.shape
-        pred_mask_score = self.mask_score_preict[self.loc.index(pruning_index)](x.transpose(1, 0), pre_mask).reshape(B, -1, 2)
+        h, n, b, c = query.shape
+        query = query[-1, :, :, :]
+
+        pred_mask_score = self.mask_score_preict[self.loc.index(pruning_index)](x.transpose(1, 0), query, pre_mask).reshape(B, -1, 2)
         if self.training:
             post_mask = F.gumbel_softmax(pred_mask_score, hard=True)[:, :, 0:1] * pre_mask
             mask_loss = self.mask_loss_cal(post_mask, pruning_index)

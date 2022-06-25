@@ -298,9 +298,9 @@ if __name__ == '__main__':
     # args.coco_path = '/home/szy/data/intruscapes' # for old server
     args.coco_path = '/data/szy4017/data/intruscapes'  # for new server
     # args.coco_path = '/data/szy4017/data/railway'   # for railway dataset
-    # args.output_dir = './results_repeat_baseline_1'
+    # args.output_dir = './results_repeat_baseline_1'd
     # args.output_dir = './results_repeat_staquery_mask_ffm_inbackbone_1'
-    args.output_dir = './results_repeat_atten_mask_ffm_inbackbone_2'
+    args.output_dir = './results_repeat_atten_mask_ffm_inbackbone_4'
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -312,11 +312,11 @@ if __name__ == '__main__':
     args.num_queries = 50
     args.ffn_model = 'new'
     args.aux_loss = True
-    # args.resume = './checkpoints/detr-r50-e632da11.pth'
-    args.resume = './results_repeat_atten_mask_ffm_inbackbone_2/checkpoint.pth'
+    args.resume = './checkpoints/detr-r50-e632da11.pth'
+    # args.resume = './results_repeat_atten_mask_ffm_inbackbone_2/checkpoint.pth'
 
     # train or eval
-    args.mode = 'eval'
+    # args.mode = 'eval'
     if args.mode == 'eval':
         os.environ["CUDA_VISIBLE_DEVICES"] = '0'
         args.eval = True
@@ -330,5 +330,5 @@ if __name__ == '__main__':
             args.world_size = 2
             mp.spawn(main, nprocs=args.world_size, args=(args.world_size, args))  # for distributed training
         else:
-            os.environ["CUDA_VISIBLE_DEVICES"] = '2'
+            os.environ["CUDA_VISIBLE_DEVICES"] = '0'
             main(None, None, args)
