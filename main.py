@@ -291,7 +291,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # training setting
-    args.batch_size = 1
+    args.batch_size = 2
     args.num_workers = 2
     args.epochs = 400
     args.dataset_file = 'intruscapes'

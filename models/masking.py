@@ -19,11 +19,11 @@ class MaskPredictor(nn.Module):
         )
 
         self.out_conv = nn.Sequential(
+            nn.Linear(embed_dim*2, embed_dim),
+            nn.GELU(),
             nn.Linear(embed_dim, embed_dim // 2),
             nn.GELU(),
-            nn.Linear(embed_dim // 2, embed_dim // 4),
-            nn.GELU(),
-            nn.Linear(embed_dim // 4, 2),
+            nn.Linear(embed_dim // 2, 2),
             nn.LogSoftmax(dim=-1)
         )
 
@@ -31,11 +31,21 @@ class MaskPredictor(nn.Module):
         x = self.in_conv(x)
         B, N, C = x.size()
         n, b, c = query.shape
+        query = query.transpose(1, 0)
         local_x = x[:, :, :C//2]
-        global_x = (x[:, :, C//2:] * policy).sum(dim=1, keepdim=True) / torch.sum(policy, dim=1, keepdim=True)
+        if len(policy.shape) == 4:
+            global_x = (x[:, :, C // 2:].unsqueeze(dim=1).repeat(1, n, 1, 1) * policy).sum(dim=1, keepdim=True) \
+                       / torch.sum(policy, dim=1, keepdim=True)
+            global_x = global_x.mean(dim=2, keepdim=False)
+        else:
+            global_x = (x[:, :, C//2:] * policy).sum(dim=1, keepdim=True) / torch.sum(policy, dim=1, keepdim=True)
         x = torch.cat([local_x, global_x.expand(B, N, C//2)], dim=-1)
-        feature = torch.cat((x, query), dim=-1)
-        return self.out_conv(x)
+        xx = x.unsqueeze(dim=1)
+        qq = query.unsqueeze(dim=2)
+        xx = xx.repeat(1, n, 1, 1)
+        qq = qq.repeat(1, 1, N, 1)
+        feature = torch.cat((xx, qq), dim=-1)
+        return self.out_conv(feature)
 
 
 class MaskLoss(nn.Module):
@@ -52,8 +62,9 @@ class MaskLoss(nn.Module):
             raise ValueError("this index is not in pruning")
 
         index = self.pruning_loc.index(pruning_index)
-        pred_ratio = pred_mask.mean(1)
+        pred_ratio = pred_mask.mean(2)
         mask_loss = torch.mean(((pred_ratio - self.token_ratio[index]) ** 2), dim=1, keepdim=True)
+        ## 这里的mean dim可能有问题
 
         return mask_loss
 
@@ -102,13 +113,15 @@ class Masking(nn.Module):
         h, n, b, c = query.shape
         query = query[-1, :, :, :]
 
-        pred_mask_score = self.mask_score_preict[self.loc.index(pruning_index)](x.transpose(1, 0), query, pre_mask).reshape(B, -1, 2)
+        pred_mask_score = self.mask_score_preict[self.loc.index(pruning_index)](x.transpose(1, 0), query, pre_mask).reshape(B, n, -1, 2)
         if self.training:
-            post_mask = F.gumbel_softmax(pred_mask_score, hard=True)[:, :, 0:1] * pre_mask
+            if len(pre_mask.shape) == 3:
+                pre_mask = pre_mask.unsqueeze(dim=1).repeat(1, n, 1, 1)
+            post_mask = F.gumbel_softmax(pred_mask_score, hard=True)[:, :, :, 0:1] * pre_mask
             mask_loss = self.mask_loss_cal(post_mask, pruning_index)
             return post_mask, mask_loss
         else:
-            score = pred_mask_score[:, :, 0]
+            score = pred_mask_score[:, :, :, 0]
             keep_token_num = int(N * self.ratio_val[self.loc.index(pruning_index)])
             keep_policy = torch.argsort(score, dim=1, descending=True)[:, :keep_token_num]
             post_mask = batch_index_select(pre_mask, keep_policy)
