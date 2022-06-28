@@ -1,6 +1,7 @@
 from torch import nn
 import torch
 import torch.nn.functional as F
+import random
 
 class MaskPredictor(nn.Module):
     """ predict mask score
@@ -28,23 +29,20 @@ class MaskPredictor(nn.Module):
         )
 
     def forward(self, x, query, policy):
-        x = self.in_conv(x)
         B, N, C = x.size()
         n, b, c = query.shape
         query = query.transpose(1, 0)
-        local_x = x[:, :, :C//2]
-        if len(policy.shape) == 4:
-            global_x = (x[:, :, C // 2:].unsqueeze(dim=1).repeat(1, n, 1, 1) * policy).sum(dim=1, keepdim=True) \
-                       / torch.sum(policy, dim=1, keepdim=True)
-            global_x = global_x.mean(dim=2, keepdim=False)
-        else:
-            global_x = (x[:, :, C//2:] * policy).sum(dim=1, keepdim=True) / torch.sum(policy, dim=1, keepdim=True)
-        x = torch.cat([local_x, global_x.expand(B, N, C//2)], dim=-1)
-        xx = x.unsqueeze(dim=1)
-        qq = query.unsqueeze(dim=2)
-        xx = xx.repeat(1, n, 1, 1)
-        qq = qq.repeat(1, 1, N, 1)
-        feature = torch.cat((xx, qq), dim=-1)
+        x = x.unsqueeze(dim=1).repeat(1, n, 1, 1)
+        if len(policy.shape) == 3:
+            policy = policy.unsqueeze(dim=1).repeat(1, n, 1, 1)
+
+        x = self.in_conv(x)
+        local_x = x[:, :, :, :C//2]
+        global_x = (x[:, :, :, C//2:] * policy).sum(dim=2, keepdim=True) / torch.sum(policy, dim=2, keepdim=True)
+
+        x = torch.cat([local_x, global_x.expand(B, n, N, C//2)], dim=-1)
+        qq = query.unsqueeze(dim=2).repeat(1, 1, N, 1)
+        feature = torch.cat((x, qq), dim=-1)
         return self.out_conv(feature)
 
 
@@ -63,8 +61,9 @@ class MaskLoss(nn.Module):
 
         index = self.pruning_loc.index(pruning_index)
         pred_ratio = pred_mask.mean(2)
-        mask_loss = torch.mean(((pred_ratio - self.token_ratio[index]) ** 2), dim=1, keepdim=True)
-        ## 这里的mean dim可能有问题
+        gt_ratio = torch.Tensor([self.token_ratio[index]]).expand_as(pred_ratio).to(pred_ratio.device)
+        mask_loss = (pred_ratio - gt_ratio) ** 2
+        mask_loss = torch.mean(mask_loss, dim=1)
 
         return mask_loss
 
@@ -114,16 +113,17 @@ class Masking(nn.Module):
         query = query[-1, :, :, :]
 
         pred_mask_score = self.mask_score_preict[self.loc.index(pruning_index)](x.transpose(1, 0), query, pre_mask).reshape(B, n, -1, 2)
+        if len(pre_mask.shape) == 3:
+            pre_mask = pre_mask.unsqueeze(dim=1).repeat(1, n, 1, 1)
+
         if self.training:
-            if len(pre_mask.shape) == 3:
-                pre_mask = pre_mask.unsqueeze(dim=1).repeat(1, n, 1, 1)
             post_mask = F.gumbel_softmax(pred_mask_score, hard=True)[:, :, :, 0:1] * pre_mask
             mask_loss = self.mask_loss_cal(post_mask, pruning_index)
             return post_mask, mask_loss
         else:
             score = pred_mask_score[:, :, :, 0]
             keep_token_num = int(N * self.ratio_val[self.loc.index(pruning_index)])
-            keep_policy = torch.argsort(score, dim=1, descending=True)[:, :keep_token_num]
+            keep_policy = torch.argsort(score, dim=2, descending=True)[:, :, :keep_token_num]
             post_mask = batch_index_select(pre_mask, keep_policy)
 
             # save mask
@@ -147,17 +147,30 @@ class Masking(nn.Module):
 
 
 def batch_index_select(x, idx):
-    if len(x.size()) == 3:
+    if len(x.size()) == 4:  # select mask
+        B, Q, N, C = x.size()
+        offset = torch.arange(B*Q, dtype=torch.long, device=x.device).view(B, -1) * N
+        offset = offset.unsqueeze(dim=-1)
+        idx = idx + offset
+        xx = x.reshape(-1, C)
+        xx[idx.reshape(-1)] = 0
+        out = xx.reshape(B, Q, N, C)
+        return out
+    elif len(x.size()) == 3:    # select memory
         B, N, C = x.size()
-        N_new = idx.size(1)
+        b, q, n = idx.size()
+        N_new = idx.size(2)
         offset = torch.arange(B, dtype=torch.long, device=x.device).view(B, 1) * N
+        idx = idx[:, random.randint(0, q), :]
         idx = idx + offset
         out = x.reshape(B*N, C)[idx.reshape(-1)].reshape(B, N_new, C)
         return out
     elif len(x.size()) == 2:
         B, N = x.size()
-        N_new = idx.size(1)
+        b, q, n = idx.size()
+        N_new = idx.size(2)
         offset = torch.arange(B, dtype=torch.long, device=x.device).view(B, 1) * N
+        idx = idx[:, random.randint(0, q), :]
         idx = idx + offset
         out = x.reshape(B*N)[idx.reshape(-1)].reshape(B, N_new)
         return out

@@ -164,6 +164,12 @@ query特征进行行人入侵状态的预测；
 （3）整理数据集信息，cityscapes，citypersons，cityintrusion，intruscapes，或其他入侵检测数据，或行人检测数据集（可通过增加标签
 改造成入侵检测数据集）。
 
+**20220628新思考**
+（1）增加query loss用于监督object query和state query，使其区分度尽可能低，这个权重可以设得小一点，有必要改进一下特征融合的形式；
+（2）query mask策略的实现点，对于mask可以实现针对每个query的定制query，但是对于memory无法实现定制选择，所有query都针对相同的memory
+进行attention计算，因此在模型推理阶段就无法相应地减少序列长度。一种方案是，只进行mask不减少序列长度，mask可以采用key mask，这样也可以
+减少有效序列的输入，对memory key的mask也不能对query进行定制，所以只能进行atten mask；另一种方案是，随机选择一个query的mask来进行
+memory序列的选择，感觉不太靠谱。
 
 ![Positional Encoding](.github/positional_encoding.PNG)
 

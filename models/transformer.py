@@ -236,10 +236,12 @@ class TransformerStateMaskDecoder(nn.Module):
                     mask_loss_list.append(target_mask_loss)
                 else:
                     post_memory_target_mask, keep_policy = self.atten_mask_predict(memory, query, (~pre_memory_target_mask).long(), i)
-                    post_memory_target_mask = ~post_memory_target_mask.bool()
-                    memory = batch_index_select(memory.transpose(1, 0), keep_policy).transpose(1, 0)
-                    pos = batch_index_select(pos.transpose(1, 0), keep_policy).transpose(1, 0)
-                    memory_key_padding_mask = batch_index_select(memory_key_padding_mask, keep_policy)
+                    post_memory_target_mask = post_memory_target_mask.bool()
+                    post_memory_mask = post_memory_target_mask.squeeze().repeat(8, 1, 1)
+                    # post_memory_mask = batch_index_select(post_memory_target_mask, keep_policy)
+                    # memory = batch_index_select(memory.transpose(1, 0), keep_policy).transpose(1, 0)
+                    # pos = batch_index_select(pos.transpose(1, 0), keep_policy).transpose(1, 0)
+                    # memory_key_padding_mask = batch_index_select(memory_key_padding_mask, keep_policy)
             else:
                 post_memory_target_mask = pre_memory_target_mask
                 post_memory_mask = post_memory_target_mask.transpose(2, 1)

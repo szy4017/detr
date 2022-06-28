@@ -291,7 +291,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # training setting
-    args.batch_size = 2
+    args.batch_size = 6
     args.num_workers = 2
     args.epochs = 400
     args.dataset_file = 'intruscapes'
@@ -318,17 +318,17 @@ if __name__ == '__main__':
     # train or eval
     # args.mode = 'eval'
     if args.mode == 'eval':
-        os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+        os.environ["CUDA_VISIBLE_DEVICES"] = '2'
         args.eval = True
         args.resume = os.path.join(args.output_dir, 'checkpoint.pth')
         args.distributed_mode = False
         main(None, None, args)
     else:
-        args.distributed_mode = False
+        # args.distributed_mode = False
         if args.distributed_mode:
-            os.environ["CUDA_VISIBLE_DEVICES"] = '2, 3'
+            os.environ["CUDA_VISIBLE_DEVICES"] = '3, 4'
             args.world_size = 2
             mp.spawn(main, nprocs=args.world_size, args=(args.world_size, args))  # for distributed training
         else:
-            os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+            os.environ["CUDA_VISIBLE_DEVICES"] = '2'
             main(None, None, args)
