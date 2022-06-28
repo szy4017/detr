@@ -122,9 +122,13 @@ class Masking(nn.Module):
             return post_mask, mask_loss
         else:
             score = pred_mask_score[:, :, :, 0]
-            keep_token_num = int(N * self.ratio_val[self.loc.index(pruning_index)])
-            keep_policy = torch.argsort(score, dim=2, descending=True)[:, :, :keep_token_num]
-            post_mask = batch_index_select(pre_mask, keep_policy)
+            drop_token_num = int(N * (1 - self.ratio_val[self.loc.index(pruning_index)]))
+            drop_policy = torch.argsort(score, dim=2, descending=False)[:, :, :drop_token_num]
+            post_mask = batch_index_select(pre_mask, drop_policy)
+
+            # keep_token_num = int(N * self.ratio_val[self.loc.index(pruning_index)])
+            # keep_policy = torch.argsort(score, dim=2, descending=True)[:, :, :keep_token_num]
+            # post_mask = batch_index_select(pre_mask, keep_policy)
 
             # save mask
             # import numpy as np
@@ -143,7 +147,7 @@ class Masking(nn.Module):
             #     import cv2
             #     cv2.imwrite('mask.png', save_mask)
 
-            return post_mask, keep_policy
+            return post_mask, drop_policy
 
 
 def batch_index_select(x, idx):

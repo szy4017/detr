@@ -291,7 +291,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # training setting
-    args.batch_size = 6
+    args.batch_size = 2
     args.num_workers = 2
     args.epochs = 400
     args.dataset_file = 'intruscapes'
@@ -316,7 +316,7 @@ if __name__ == '__main__':
     # args.resume = './results_repeat_atten_mask_ffm_inbackbone_2/checkpoint.pth'
 
     # train or eval
-    # args.mode = 'eval'
+    args.mode = 'eval'
     if args.mode == 'eval':
         os.environ["CUDA_VISIBLE_DEVICES"] = '2'
         args.eval = True
@@ -324,7 +324,7 @@ if __name__ == '__main__':
         args.distributed_mode = False
         main(None, None, args)
     else:
-        # args.distributed_mode = False
+        args.distributed_mode = False
         if args.distributed_mode:
             os.environ["CUDA_VISIBLE_DEVICES"] = '3, 4'
             args.world_size = 2
