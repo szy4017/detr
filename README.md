@@ -170,6 +170,8 @@ query特征进行行人入侵状态的预测；
 进行attention计算，因此在模型推理阶段就无法相应地减少序列长度。一种方案是，只进行mask不减少序列长度，mask可以采用key mask，这样也可以
 减少有效序列的输入，对memory key的mask也不能对query进行定制，所以只能进行atten mask；另一种方案是，随机选择一个query的mask来进行
 memory序列的选择，感觉不太靠谱。
+(3)对于memory mask的改进，原方案是根据预测的mask score进行保留score高的，但是由于不同query想保留的特征是不同的，无法实现在memory上的
+mask；换一种思路可以是把所有query都不想保留的特征给剔除掉，这样可以对memory进行mask操作，也可以直接去掉mask的特征以减少序列长度。
 
 ![Positional Encoding](.github/positional_encoding.PNG)
 
