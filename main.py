@@ -318,7 +318,7 @@ if __name__ == '__main__':
     # train or eval
     # args.mode = 'eval'
     if args.mode == 'eval':
-        os.environ["CUDA_VISIBLE_DEVICES"] = '2'
+        os.environ["CUDA_VISIBLE_DEVICES"] = '4'
         args.eval = True
         args.resume = os.path.join(args.output_dir, 'checkpoint.pth')
         args.distributed_mode = False
@@ -326,7 +326,7 @@ if __name__ == '__main__':
     else:
         # args.distributed_mode = False
         if args.distributed_mode:
-            os.environ["CUDA_VISIBLE_DEVICES"] = '3, 4'
+            os.environ["CUDA_VISIBLE_DEVICES"] = '3, 5'
             args.world_size = 2
             mp.spawn(main, nprocs=args.world_size, args=(args.world_size, args))  # for distributed training
         else:

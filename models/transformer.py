@@ -42,8 +42,9 @@ class Transformer(nn.Module):
             self.decoder = TransformerStateMaskDecoder(decoder_layer, num_decoder_layers, decoder_norm,
                                                        return_intermediate=return_intermediate_dec,
                                                        sta_query=sta_query,
-                                                       embed_dim=256, pruning_loc=[2, 4],
-                                                       token_ratio=[0.6, 0.3])
+                                                       embed_dim=256,
+                                                       pruning_loc=[2, 4],
+                                                       token_ratio=[0.8, 0.6])
         else:
             self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm,
                                               return_intermediate=return_intermediate_dec,

@@ -101,7 +101,7 @@ class Masking(nn.Module):
                     ratio_val.append(self.token_ratio[self.pruning_loc.index(l)])
                 else:
                     ratio_train.append(ratio_train[-1])
-                    ratio_val.append(1.0)
+                    ratio_val.append(ratio_train[-1])
         return loc, ratio_train, ratio_val
 
     def forward(self, x, query, pre_mask, pruning_index):
