@@ -300,7 +300,7 @@ if __name__ == '__main__':
     # args.coco_path = '/data/szy4017/data/railway'   # for railway dataset
     # args.output_dir = './results_repeat_baseline_1'd
     # args.output_dir = './results_repeat_staquery_mask_ffm_inbackbone_1'
-    args.output_dir = './results_repeat_atten_mask_ffm_inbackbone_4'
+    args.output_dir = './results_repeat_atten_mask_ffm_inbackbone_5'
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -316,9 +316,9 @@ if __name__ == '__main__':
     # args.resume = './results_repeat_atten_mask_ffm_inbackbone_2/checkpoint.pth'
 
     # train or eval
-    args.mode = 'eval'
+    # args.mode = 'eval'
     if args.mode == 'eval':
-        os.environ["CUDA_VISIBLE_DEVICES"] = '4'
+        os.environ["CUDA_VISIBLE_DEVICES"] = '3'
         args.eval = True
         args.resume = os.path.join(args.output_dir, 'checkpoint.pth')
         args.distributed_mode = False

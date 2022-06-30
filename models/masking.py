@@ -43,6 +43,8 @@ class MaskPredictor(nn.Module):
         x = torch.cat([local_x, global_x.expand(B, n, N, C//2)], dim=-1)
         qq = query.unsqueeze(dim=2).repeat(1, 1, N, 1)
         feature = torch.cat((x, qq), dim=-1)
+        ## 对feature在query层上进行聚合
+        feature = torch.sum(feature, dim=1, keepdim=False)
         return self.out_conv(feature)
 
 
@@ -60,11 +62,10 @@ class MaskLoss(nn.Module):
             raise ValueError("this index is not in pruning")
 
         index = self.pruning_loc.index(pruning_index)
-        pred_ratio = pred_mask.mean(2)
+        pred_ratio = pred_mask.mean(1)
         gt_ratio = torch.Tensor([self.token_ratio[index]]).expand_as(pred_ratio).to(pred_ratio.device)
         mask_loss = (pred_ratio - gt_ratio) ** 2
-        mask_loss = torch.mean(mask_loss, dim=1)
-
+        # mask_loss = torch.mean(mask_loss, dim=1)
         return mask_loss
 
 
@@ -101,7 +102,7 @@ class Masking(nn.Module):
                     ratio_val.append(self.token_ratio[self.pruning_loc.index(l)])
                 else:
                     ratio_train.append(ratio_train[-1])
-                    ratio_val.append(ratio_train[-1])
+                    ratio_val.append(1.0)
         return loc, ratio_train, ratio_val
 
     def forward(self, x, query, pre_mask, pruning_index):
@@ -112,19 +113,23 @@ class Masking(nn.Module):
         h, n, b, c = query.shape
         query = query[-1, :, :, :]
 
-        pred_mask_score = self.mask_score_preict[self.loc.index(pruning_index)](x.transpose(1, 0), query, pre_mask).reshape(B, n, -1, 2)
-        if len(pre_mask.shape) == 3:
-            pre_mask = pre_mask.unsqueeze(dim=1).repeat(1, n, 1, 1)
+        pred_mask_score = self.mask_score_preict[self.loc.index(pruning_index)](x.transpose(1, 0), query, pre_mask).reshape(B, -1, 2)
+        ## 对pred_mask_score在query层上进行聚合
+        # pred_mask_score = torch.sum(pred_mask_score, dim=1, keepdim=False)
+        # pred_mask_score = F.softmax(pred_mask_score, dim=-1)
+
+        # if len(pre_mask.shape) == 3:
+        #     pre_mask = pre_mask.unsqueeze(dim=1).repeat(1, n, 1, 1)
 
         if self.training:
-            post_mask = F.gumbel_softmax(pred_mask_score, hard=True)[:, :, :, 0:1] * pre_mask
+            post_mask = F.gumbel_softmax(pred_mask_score, hard=True)[:, :, 0:1] * pre_mask
             mask_loss = self.mask_loss_cal(post_mask, pruning_index)
             return post_mask, mask_loss
         else:
-            score = pred_mask_score[:, :, :, 0]
-            drop_token_num = int(N * (1 - self.ratio_val[self.loc.index(pruning_index)]))
-            drop_policy = torch.argsort(score, dim=2, descending=False)[:, :, :drop_token_num]
-            post_mask = batch_index_select(pre_mask, drop_policy)
+            score = pred_mask_score[:, :, 0]
+            keep_token_num = int(N * self.ratio_val[self.loc.index(pruning_index)])
+            keep_policy = torch.argsort(score, dim=1, descending=True)[:, :keep_token_num]
+            post_mask = batch_index_select(pre_mask, keep_policy)
 
             # keep_token_num = int(N * self.ratio_val[self.loc.index(pruning_index)])
             # keep_policy = torch.argsort(score, dim=2, descending=True)[:, :, :keep_token_num]
@@ -147,34 +152,33 @@ class Masking(nn.Module):
             #     import cv2
             #     cv2.imwrite('mask.png', save_mask)
 
-            return post_mask, drop_policy
+            return post_mask, keep_policy
 
 
 def batch_index_select(x, idx):
-    if len(x.size()) == 4:  # select mask
+    if len(x.size()) == 4:  # select memory mask
         B, Q, N, C = x.size()
+        N_new = idx.size(1)
         offset = torch.arange(B*Q, dtype=torch.long, device=x.device).view(B, -1) * N
         offset = offset.unsqueeze(dim=-1)
+        idx = idx.unsqueeze(dim=1).repeat(1, Q, 1)
         idx = idx + offset
         xx = x.reshape(-1, C)
-        xx[idx.reshape(-1)] = 0
-        out = xx.reshape(B, Q, N, C)
+        out = xx[idx.reshape(-1)].reshape(B, Q, N_new, C)
+        # xx[idx.reshape(-1)] = 0
+        # out = xx.reshape(B, Q, N, C)
         return out
-    elif len(x.size()) == 3:    # select memory
+    elif len(x.size()) == 3:    # select memory and pos
         B, N, C = x.size()
-        b, q, n = idx.size()
-        N_new = idx.size(2)
+        N_new = idx.size(1)
         offset = torch.arange(B, dtype=torch.long, device=x.device).view(B, 1) * N
-        idx = idx[:, random.randint(0, q), :]
         idx = idx + offset
         out = x.reshape(B*N, C)[idx.reshape(-1)].reshape(B, N_new, C)
         return out
-    elif len(x.size()) == 2:
+    elif len(x.size()) == 2:    # select key padding mask
         B, N = x.size()
-        b, q, n = idx.size()
-        N_new = idx.size(2)
+        N_new = idx.size(1)
         offset = torch.arange(B, dtype=torch.long, device=x.device).view(B, 1) * N
-        idx = idx[:, random.randint(0, q), :]
         idx = idx + offset
         out = x.reshape(B*N)[idx.reshape(-1)].reshape(B, N_new)
         return out

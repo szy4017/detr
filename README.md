@@ -173,6 +173,18 @@ memory序列的选择，感觉不太靠谱。
 (3)对于memory mask的改进，原方案是根据预测的mask score进行保留score高的，但是由于不同query想保留的特征是不同的，无法实现在memory上的
 mask；换一种思路可以是把所有query都不想保留的特征给剔除掉，这样可以对memory进行mask操作，也可以直接去掉mask的特征以减少序列长度。
 
+**20220630state query mask实验思考**
+![State Query Mask Experiment](.github/state_query_mask_experiment_1.png)
+（1）实验结果分析：由实验结果可见，在mask predict中加入query信息，并对每一个query都定制一个attention mask会导致模型的性能下降，并且这一
+性能下降不能靠改变mask ratio得以补偿，考虑可能是query信息在mask predict中的引入机制可能会导致性能下降，目前的方式是将feature特征与query
+特征cat起来进行预测，feature和query都是256维度，这样query在预测中信息占比较大，但query信息的随机性较大，可能会干扰正常的mask预测。还有采用
+attention mask的形式可能在推理过程中不太适用，分析比较random mask和feature mask一个是在key上进行mask，一个是直接减少序列特征都能保持较好
+的模型性能，而attention mask却发生较大性能损失，可能是认为进行attention的mask会导致attention计算后的信息损失，原本计算后权重较大的patch feature
+也被mask了。
+（2）改进方案：第一步，改变state query mask中的mask方式，将attention mask改为key mask或直接减少序列特征，对于mask predict输出的maks feature
+在query层进行聚合，输出一个mask；第二步，改进query信息在mask predict中的引入方式，一个是采用cat低比率的query，一个是根据query信息对feature进行
+特征通道的增强，两种方式。
+
 ![Positional Encoding](.github/positional_encoding.PNG)
 
 **What it is**. Unlike traditional computer vision techniques, DETR approaches object detection as a direct set prediction problem. It consists of a set-based global loss, which forces unique predictions via bipartite matching, and a Transformer encoder-decoder architecture. 
