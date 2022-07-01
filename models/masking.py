@@ -20,32 +20,66 @@ class MaskPredictor(nn.Module):
         )
 
         self.out_conv = nn.Sequential(
-            nn.Linear(embed_dim*2, embed_dim),
-            nn.GELU(),
             nn.Linear(embed_dim, embed_dim // 2),
             nn.GELU(),
-            nn.Linear(embed_dim // 2, 2),
+            nn.Linear(embed_dim // 2, embed_dim // 4),
+            nn.GELU(),
+            nn.Linear(embed_dim // 4, 2),
             nn.LogSoftmax(dim=-1)
         )
 
+        self.query_conv = nn.Sequential(
+            nn.Linear(embed_dim, embed_dim * 2),
+            nn.GELU(),
+            nn.Linear(embed_dim * 2, embed_dim * 4),
+            nn.GELU(),
+            nn.Linear(embed_dim * 4, embed_dim),
+            nn.Softmax(dim=-1)
+        )
+
+    # def forward(self, x, query, policy):
+    #     N, B, C = x.size()
+    #     n, b, c = query.shape
+    #     bb, nn, cc = policy.shape
+    #
+    #     x = x.transpose(1, 0)
+    #     query = query.transpose(1, 0)
+    #     xx = x.unsqueeze(dim=1).repeat(1, n, 1, 1)
+    #     qq = query.unsqueeze(dim=2).repeat(1, 1, N, 1)
+    #     policy = policy.unsqueeze(dim=1).repeat(1, n, 1, 1)
+    #
+    #     xx = self.in_conv(xx)
+    #     local_x = xx[:, :, :, :C//2]
+    #     global_x = torch.div((xx[:, :, :, C//2:] * policy).sum(dim=2, keepdim=True), torch.sum(policy, dim=2, keepdim=True))
+    #     global_x = torch.where(torch.isnan(global_x), torch.full_like(global_x, 0), global_x)
+    #     # global_x = (xx[:, :, :, C//2:] * policy).sum(dim=2, keepdim=True) / torch.sum(policy, dim=2, keepdim=True)
+    #
+    #     xx = torch.cat([local_x, global_x.expand(B, n, N, C//2)], dim=-1)
+    #     feature = torch.cat((xx, qq), dim=-1)
+    #     ## 对feature在query层上进行聚合
+    #     feature = torch.sum(feature, dim=1, keepdim=False)
+    #     out = self.out_conv(feature)
+    #     return out
+
     def forward(self, x, query, policy):
-        B, N, C = x.size()
+        N, B, C = x.size()
         n, b, c = query.shape
+        bb, nn, cc = policy.shape
+
+        x = x.transpose(1, 0)
         query = query.transpose(1, 0)
-        x = x.unsqueeze(dim=1).repeat(1, n, 1, 1)
-        if len(policy.shape) == 3:
-            policy = policy.unsqueeze(dim=1).repeat(1, n, 1, 1)
 
         x = self.in_conv(x)
-        local_x = x[:, :, :, :C//2]
-        global_x = (x[:, :, :, C//2:] * policy).sum(dim=2, keepdim=True) / torch.sum(policy, dim=2, keepdim=True)
+        local_x = x[:, :, :C//2]
+        global_x = torch.div((x[:, :, C//2:] * policy).sum(dim=1, keepdim=True), torch.sum(policy, dim=1, keepdim=True))
 
-        x = torch.cat([local_x, global_x.expand(B, n, N, C//2)], dim=-1)
-        qq = query.unsqueeze(dim=2).repeat(1, 1, N, 1)
-        feature = torch.cat((x, qq), dim=-1)
-        ## 对feature在query层上进行聚合
-        feature = torch.sum(feature, dim=1, keepdim=False)
-        return self.out_conv(feature)
+        x = torch.cat([local_x, global_x.expand(B, N, C//2)], dim=-1)
+        ## 用query特征对x进行channel-wise的增强
+        q = torch.mean(query, dim=1, keepdim=True)
+        qq = self.query_conv(q)
+        x = x * qq
+        out = self.out_conv(x)
+        return out
 
 
 class MaskLoss(nn.Module):
@@ -113,15 +147,10 @@ class Masking(nn.Module):
         h, n, b, c = query.shape
         query = query[-1, :, :, :]
 
-        pred_mask_score = self.mask_score_preict[self.loc.index(pruning_index)](x.transpose(1, 0), query, pre_mask).reshape(B, -1, 2)
-        ## 对pred_mask_score在query层上进行聚合
-        # pred_mask_score = torch.sum(pred_mask_score, dim=1, keepdim=False)
-        # pred_mask_score = F.softmax(pred_mask_score, dim=-1)
-
-        # if len(pre_mask.shape) == 3:
-        #     pre_mask = pre_mask.unsqueeze(dim=1).repeat(1, n, 1, 1)
+        pred_mask_score = self.mask_score_preict[self.loc.index(pruning_index)](x, query, pre_mask)
 
         if self.training:
+            # pre_mask中1表示真实mask中False，不进行mask
             post_mask = F.gumbel_softmax(pred_mask_score, hard=True)[:, :, 0:1] * pre_mask
             mask_loss = self.mask_loss_cal(post_mask, pruning_index)
             return post_mask, mask_loss
