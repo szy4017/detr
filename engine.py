@@ -36,7 +36,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         weight_dict = criterion.weight_dict ## weight是每个loss在计算total loss的权重系数
         if sta_mask:
             loss_dict['loss_state_mask'] = outputs['state_mask_loss'].mean()
-            weight_dict['loss_state_mask'] = 1
+            weight_dict['loss_state_mask'] = 100
         losses = sum(loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if k in weight_dict)
 
         # reduce losses over all GPUs for logging purposes

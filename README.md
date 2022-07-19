@@ -185,6 +185,26 @@ attention mask的形式可能在推理过程中不太适用，分析比较random
 在query层进行聚合，输出一个mask；第二步，改进query信息在mask predict中的引入方式，一个是采用cat低比率的query，一个是根据query信息对feature进行
 特征通道的增强，两种方式。
 
+**20220705与贺老师讨论**
+（1）扩充相关研究的对比，可以设定行人入侵检测是多标签目标检测的自任务，用其他多标签目标检测方法应用在入侵检测任务上。入侵检测与多标签目标检测之间的区别：
+多标签目标检测所预测的标签是子标签与父标签的概念，而入侵检测中目标类别标签与入侵标签没有强相关性，入侵标签的确定与目标所处的位置环境相关较高，而与目标自身
+相关性较低。
+（2）工作安排：整理对标的相关工作和实现数据集，对比的工作可以分为这几类：多标签目标检测，CNN目标检测，DETR目标检测，PIDNet，其他入侵检测算法。数据集对比，
+可以把其他工作放在intruscapes上进行比较，也可以把SDETR放在多标签目标检测数据集上进行比较。
+
+**Related Work思路整理**
+（1）首先梳理在行人入侵检测任务中的现有解决方案：目前主要有基于图像入侵区域判断的入侵检测和基于行人运动轨迹预测的入侵检测，入侵检测的场景可分为动态场景检测和
+静态场景检测，我们的工作是focus在动态场景的。
+（2）梳理入侵状态检测可对标的工作（由于专门左动态场景的入侵检测工作比较少），通用目标检测+状态预测，多标签目标检测，基于入侵区域分割的入侵检测（PIDNet）。
+
+**数据集整理**
+（1）一共三个数据集：cityintrusion，intruscapes，JAAD。
+（2）将以上数据集都转换成COCO形式。
+（3）整理数据集信息，图像数量，不同类别的目标数量，其中可视化intruscapes的不同状态的box分布和尺寸分布直方图。
+![State Query Mask Experiment](.github/cityintrusion.png)
+citypersons: 2975 images for training, 500 images for validation.
+![State Query Mask Experiment](.github/citypersons.png)
+
 ![Positional Encoding](.github/positional_encoding.PNG)
 
 **What it is**. Unlike traditional computer vision techniques, DETR approaches object detection as a direct set prediction problem. It consists of a set-based global loss, which forces unique predictions via bipartite matching, and a Transformer encoder-decoder architecture. 

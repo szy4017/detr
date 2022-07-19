@@ -20,21 +20,21 @@ class MaskPredictor(nn.Module):
         )
 
         self.out_conv = nn.Sequential(
+            nn.LayerNorm(embed_dim),
             nn.Linear(embed_dim, embed_dim // 2),
             nn.GELU(),
             nn.Linear(embed_dim // 2, embed_dim // 4),
             nn.GELU(),
             nn.Linear(embed_dim // 4, 2),
-            nn.LogSoftmax(dim=-1)
+            nn.Softmax(dim=-1)
         )
 
         self.query_conv = nn.Sequential(
+            nn.LayerNorm(embed_dim),
             nn.Linear(embed_dim, embed_dim * 2),
             nn.GELU(),
-            nn.Linear(embed_dim * 2, embed_dim * 4),
-            nn.GELU(),
-            nn.Linear(embed_dim * 4, embed_dim),
-            nn.Softmax(dim=-1)
+            nn.Linear(embed_dim * 2, embed_dim),
+            nn.LogSoftmax(dim=-1)
         )
 
     # def forward(self, x, query, policy):
@@ -65,6 +65,7 @@ class MaskPredictor(nn.Module):
         N, B, C = x.size()
         n, b, c = query.shape
         bb, nn, cc = policy.shape
+        # policy = (~policy.bool()).long()
 
         x = x.transpose(1, 0)
         query = query.transpose(1, 0)
@@ -79,6 +80,13 @@ class MaskPredictor(nn.Module):
         qq = self.query_conv(q)
         x = x * qq
         out = self.out_conv(x)
+
+        # save out
+        import numpy as np
+        save_out = out.cpu().detach().numpy()[-1, :, :]
+        save_out_arg = torch.argmax(out, dim=-1).cpu().detach().numpy()[-1]
+        np.savetxt('out.txt', save_out)
+        np.savetxt('out_arg.txt', save_out_arg)
         return out
 
 
@@ -97,10 +105,25 @@ class MaskLoss(nn.Module):
 
         index = self.pruning_loc.index(pruning_index)
         pred_ratio = pred_mask.mean(1)
+        print(pred_ratio)
         gt_ratio = torch.Tensor([self.token_ratio[index]]).expand_as(pred_ratio).to(pred_ratio.device)
-        mask_loss = (pred_ratio - gt_ratio) ** 2
+        mask_loss = (pred_ratio - gt_ratio) ** 2 / (gt_ratio ** 2)
         # mask_loss = torch.mean(mask_loss, dim=1)
+        print(mask_loss)
         return mask_loss
+
+
+class DistillLoss(nn.Module):
+    """ calculate the loss of memory and masked memory
+
+    """
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, memory, mask):
+        N, B, C = memory.shape
+        b, n, c = mask.shape
+
 
 
 class Masking(nn.Module):
@@ -120,6 +143,7 @@ class Masking(nn.Module):
         self.num_layers = num_layers
         self.loc, self.ratio_train, self.ratio_val = self.pruning_ratio_transform()
         self.mask_loss_cal = MaskLoss(self.loc, self.ratio_train)
+        self.distill_loss_cal = DistillLoss()
         predictor_list = [MaskPredictor(self.embed_dim) for _ in range(len(self.loc))]
         self.mask_score_preict = nn.ModuleList(predictor_list)
 
@@ -150,14 +174,18 @@ class Masking(nn.Module):
         pred_mask_score = self.mask_score_preict[self.loc.index(pruning_index)](x, query, pre_mask)
 
         if self.training:
-            # pre_mask中1表示真实mask中False，不进行mask
-            post_mask = F.gumbel_softmax(pred_mask_score, hard=True)[:, :, 0:1] * pre_mask
+            # pre_mask中0表示真实mask中False，不进行mask
+            # gumbel_softma这里存在问题，明明输入的数据已经出现一边倒的偏差，经过gumbel之后还能通过随机选择得到
+            pick = F.gumbel_softmax(pred_mask_score, hard=True)[:, :, 0:1]
+            post_mask = pre_mask * pick
+            distill_loss = self.distill_loss_cal(x, post_mask)
             mask_loss = self.mask_loss_cal(post_mask, pruning_index)
             return post_mask, mask_loss
         else:
             score = pred_mask_score[:, :, 0]
             keep_token_num = int(N * self.ratio_val[self.loc.index(pruning_index)])
-            keep_policy = torch.argsort(score, dim=1, descending=True)[:, :keep_token_num]
+            # keep_policy = torch.argsort(score, dim=1, descending=True)[:, :keep_token_num]
+            keep_policy = torch.randint(low=0, high=score.size(-1), size=(1, keep_token_num)).to(score.device)
             post_mask = batch_index_select(pre_mask, keep_policy)
 
             # keep_token_num = int(N * self.ratio_val[self.loc.index(pruning_index)])
